@@ -1,0 +1,46 @@
+name: bankofdad
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-bankofdad}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-bankofdad-dev}
+      POSTGRES_DB: ${POSTGRES_DB:-bankofdad}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-bankofdad} -d ${POSTGRES_DB:-bankofdad}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Development}
+      ASPNETCORE_HTTP_PORTS: "8080"
+      ConnectionStrings__Default: "Host=db;Port=5432;Database=${POSTGRES_DB:-bankofdad};Username=${POSTGRES_USER:-bankofdad};Password=${POSTGRES_PASSWORD:-bankofdad-dev}"
+      Jwt__SigningKey: ${JWT_SIGNING_KEY:-dev-only-signing-key-change-me-0123456789abcdef}
+      Apple__ClientId: ${APPLE_CLIENT_ID:-com.example.bankofdad}
+      Apns__KeyId: ${APNS_KEY_ID:-}
+      Apns__TeamId: ${APNS_TEAM_ID:-}
+      Apns__BundleId: ${APNS_BUNDLE_ID:-com.example.bankofdad}
+      Apns__UseSandbox: ${APNS_USE_SANDBOX:-true}
+      Apns__KeyPath: ${APNS_KEY_PATH:-/run/secrets/apns/AuthKey.p8}
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./secrets:/run/secrets/apns:ro
+
+volumes:
+  pgdata:
