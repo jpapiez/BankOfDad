@@ -34,7 +34,7 @@ Any change here must be reflected on both sides.
   "parents": [UserDto], "children": [ChildDto] }
 
 // ChildDto
-{ "id": "uuid", "displayName": "Sam", "avatarColor": "#4F8EF7", "pairedDeviceCount": 1 }
+{ "id": "uuid", "displayName": "Sam", "avatarColor": "#4F8EF7", "pairedDeviceCount": 1 }  // count of active (unrevoked, unexpired) kid-device sessions
 
 // LoanTermsInput (used by preview and create)
 { "childId": "uuid", "title": "New bike", "principal": 300.00,
@@ -44,7 +44,7 @@ Any change here must be reflected on both sides.
   "sendReminders": true, "sendReceipts": true }
 
 // SchedulePreview
-{ "installmentAmount": 50.73, "totalInterest": 4.38, "totalRepayable": 304.38,
+{ "installmentAmount": 50.73, "totalInterest": 4.39, "totalRepayable": 304.39,
   "installments": [ { "seq": 1, "dueDate": "2026-11-01", "principalDue": 49.48, "interestDue": 1.25, "amountDue": 50.73 } ] }
 
 // LoanSummaryDto
@@ -56,9 +56,9 @@ Any change here must be reflected on both sides.
 // LoanDetailDto = all LoanSummaryDto fields plus:
 { "interestEnabled": true, "annualRate": 0.05, "frequency": "monthly", "installmentCount": 6, "firstDueDate": "2026-11-01",
   "lateFeeFlat": 5.00, "lateFeePercent": 0.10, "lateFeeGraceDays": 3, "sendReminders": true, "sendReceipts": true,
-  "totalInterest": 4.38, "totalRepayable": 304.38, "outstandingFees": 0.00,
+  "totalInterest": 4.39, "totalRepayable": 304.39, "outstandingFees": 0.00,
   "installments": [InstallmentDto], "payments": [PaymentDto], "lateFees": [LateFeeDto],
-  "termsSummary": "Sam borrowed $300.00 for \"New bike\" at 5% APR, repaid in 6 monthly payments of $50.73 starting Nov 1, 2026. A late fee of $5.00 + 10% of the missed payment applies 3 days after a due date." }
+  "termsSummary": "Sam borrowed $300.00 for \"New bike\" at 5% APR, repaid in 6 monthly payments of $50.73 starting Nov 1, 2026. A late fee of $5.00 + 10% of the missed payment applies 3 days after a missed due date." }
 
 // InstallmentDto
 { "id": "uuid", "seq": 1, "dueDate": "2026-11-01", "principalDue": 49.48, "interestDue": 1.25, "amountDue": 50.73,

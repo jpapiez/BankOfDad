@@ -1,0 +1,62 @@
+name: BankOfDad
+options:
+  bundleIdPrefix: com.example
+  deploymentTarget:
+    iOS: "17.0"
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    IPHONEOS_DEPLOYMENT_TARGET: "17.0"
+    API_BASE_URL: "http://localhost:8080"
+  configs:
+    Debug:
+      SWIFT_ACTIVE_COMPILATION_CONDITIONS: "DEBUG"
+targets:
+  BankOfDad:
+    type: application
+    platform: iOS
+    sources:
+      - path: BankOfDad
+        excludes:
+          - Resources
+      - path: BankOfDad/Resources/Assets.xcassets
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.bankofdad
+        INFOPLIST_FILE: BankOfDad/Resources/Info.plist
+        CODE_SIGN_ENTITLEMENTS: BankOfDad/Resources/BankOfDad.entitlements
+        CURRENT_PROJECT_VERSION: 1
+        MARKETING_VERSION: 1.0
+    info:
+      path: BankOfDad/Resources/Info.plist
+      properties:
+        CFBundleDisplayName: Bank of Dad
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        API_BASE_URL: $(API_BASE_URL)
+        NSCameraUsageDescription: Camera access lets kids scan pairing QR codes from their parent.
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: false
+          NSExceptionDomains:
+            localhost:
+              NSExceptionAllowsInsecureHTTPLoads: true
+            127.0.0.1:
+              NSExceptionAllowsInsecureHTTPLoads: true
+        CFBundleURLTypes:
+          - CFBundleURLName: com.example.bankofdad.pairing
+            CFBundleURLSchemes:
+              - bankofdad
+        UIBackgroundModes:
+          - remote-notification
+  BankOfDadTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - BankOfDadTests
+    dependencies:
+      - target: BankOfDad
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.bankofdad.tests
+        GENERATE_INFOPLIST_FILE: YES
