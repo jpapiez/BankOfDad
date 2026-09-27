@@ -1,5 +1,6 @@
 import SwiftUI
 
+@MainActor
 struct KidSettingsView: View {
     @Environment(AuthSession.self) private var authSession
 

@@ -20,6 +20,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Npgsql;
 using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.WebUtilities;
 
 var builder = WebApplication.CreateBuilder(args);
 var env = builder.Environment;
@@ -110,6 +111,15 @@ app.UseExceptionHandler(errorApp => errorApp.Run(async context =>
     var includeException = context.RequestServices.GetRequiredService<IHostEnvironment>().IsDevelopment() || context.RequestServices.GetRequiredService<IHostEnvironment>().IsEnvironment("Testing");
     await Results.Problem(title: api?.Title ?? "Unexpected error", detail: api?.Detail ?? (status == 500 && !includeException ? null : ex?.Message), statusCode: status).ExecuteAsync(context);
 }));
+app.UseStatusCodePages(async statusCodeContext =>
+{
+    var context = statusCodeContext.HttpContext;
+    var status = context.Response.StatusCode;
+    if (status is >= 400 and < 500)
+    {
+        await Results.Problem(title: ReasonPhrases.GetReasonPhrase(status), statusCode: status).ExecuteAsync(context);
+    }
+});
 if (app.Environment.IsDevelopment()) app.MapOpenApi();
 app.UseAuthentication();
 app.UseAuthorization();
@@ -333,6 +343,7 @@ loans.MapPost("/{loanId:guid}/cancel", async (Guid loanId, ClaimsPrincipal user,
 });
 loans.MapPost("/{loanId:guid}/payments", async (Guid loanId, PaymentRequest request, ClaimsPrincipal user, BankOfDadDbContext db, PaymentAllocator allocator, LoanStateService state, NotificationService notifications, IClock clock, CancellationToken ct) =>
 {
+    if (request.Amount <= 0m) throw new ApiException(400, "Payment amount must be greater than zero.");
     await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
     var loan = await RequireLoan(db, loanId, user.FamilyId(), ct);
     if (loan.Status != LoanStatus.Active) throw new ApiException(409, "Loan is not active.");
@@ -444,25 +455,26 @@ static async Task ApplyMigrationsAsync(IServiceProvider services, ILogger logger
     }
 }
 
-static string Required(string value, string name)
+static string Required(string? value, string name)
 {
     if (string.IsNullOrWhiteSpace(value)) throw new ApiException(400, $"{name} is required.");
     return value.Trim();
 }
 
-static string NormalizeEmail(string email)
+static string NormalizeEmail(string? email)
 {
     if (string.IsNullOrWhiteSpace(email) || !email.Contains('@')) throw new ApiException(400, "Valid email is required.");
     return email.Trim().ToLowerInvariant();
 }
 
-static void ValidatePassword(string password)
+static void ValidatePassword(string? password)
 {
-    if (password.Length < 8) throw new ApiException(400, "Password must be at least 8 characters.");
+    if (string.IsNullOrWhiteSpace(password) || password.Length < 8) throw new ApiException(400, "Password must be at least 8 characters.");
 }
 
-static void ValidateTimeZone(string timeZone)
+static void ValidateTimeZone(string? timeZone)
 {
+    if (string.IsNullOrWhiteSpace(timeZone)) throw new ApiException(400, "Invalid time zone.");
     try { _ = TimeZoneInfo.FindSystemTimeZoneById(timeZone); }
     catch (TimeZoneNotFoundException) { throw new ApiException(400, "Invalid time zone."); }
     catch (InvalidTimeZoneException) { throw new ApiException(400, "Invalid time zone."); }

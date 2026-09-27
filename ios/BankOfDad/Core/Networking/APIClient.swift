@@ -166,7 +166,7 @@ final class APIClient: @unchecked Sendable {
         decoder.dateDecodingStrategy = .custom { decoder in
             let container = try decoder.singleValueContainer()
             let string = try container.decode(String.self)
-            if let date = ISO8601DateParsers.fractional.date(from: string) ?? ISO8601DateParsers.standard.date(from: string) { return date }
+            if let date = ISO8601DateParsers.date(from: string) { return date }
             throw DecodingError.dataCorruptedError(in: container, debugDescription: "Invalid ISO-8601 date: \(string)")
         }
         return decoder
@@ -183,6 +183,20 @@ final class APIClient: @unchecked Sendable {
 }
 
 enum ISO8601DateParsers {
+    static func date(from string: String) -> Date? {
+        fractional.date(from: string) ?? standard.date(from: string) ?? normalizedFractionalDate(from: string)
+    }
+
+    private static func normalizedFractionalDate(from string: String) -> Date? {
+        guard let dot = string.firstIndex(of: ".") else { return nil }
+        let fractionStart = string.index(after: dot)
+        guard let timeZoneStart = string[fractionStart...].firstIndex(where: { $0 == "Z" || $0 == "+" || $0 == "-" }) else { return nil }
+        let fraction = String(string[fractionStart..<timeZoneStart])
+        guard !fraction.isEmpty else { return nil }
+        let normalized = fraction.count >= 3 ? String(fraction.prefix(3)) : fraction.padding(toLength: 3, withPad: "0", startingAt: 0)
+        return fractional.date(from: String(string[..<fractionStart]) + normalized + String(string[timeZoneStart...]))
+    }
+
     static let standard: ISO8601DateFormatter = {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime]

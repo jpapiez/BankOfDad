@@ -24,7 +24,7 @@ final class DTOTests: XCTestCase {
 
     func testNotificationDecodes() throws {
         let json = Data(#"""
-        { "id": "50000000-0000-0000-0000-000000000001", "type": "receipt", "title": "Payment received", "body": "Nice work", "loanId": "30000000-0000-0000-0000-000000000001", "createdAt": "2026-09-27T22:00:00.123Z", "readAt": null }
+        { "id": "50000000-0000-0000-0000-000000000001", "type": "receipt", "title": "Payment received", "body": "Nice work", "loanId": "30000000-0000-0000-0000-000000000001", "createdAt": "2026-09-27T22:00:00.1234567Z", "readAt": null }
         """#.utf8)
         let notification = try APIClient.makeDecoder().decode(AppNotification.self, from: json)
         XCTAssertEqual(notification.type, .receipt)

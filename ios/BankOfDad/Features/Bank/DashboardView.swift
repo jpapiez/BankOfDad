@@ -15,6 +15,7 @@ final class DashboardViewModel {
     }
 }
 
+@MainActor
 struct DashboardView: View {
     @Environment(AppEnvironment.self) private var environment
     @State private var viewModel = DashboardViewModel()

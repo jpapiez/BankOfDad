@@ -15,6 +15,7 @@ final class MyLoansViewModel {
     }
 }
 
+@MainActor
 struct MyLoansView: View {
     @Environment(AppEnvironment.self) private var environment
     @State private var viewModel = MyLoansViewModel()

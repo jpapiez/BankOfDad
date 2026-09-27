@@ -39,6 +39,7 @@ final class FamilyViewModel {
     }
 }
 
+@MainActor
 struct FamilyView: View {
     @Environment(AppEnvironment.self) private var environment
     @State private var viewModel = FamilyViewModel()
@@ -94,7 +95,7 @@ struct FamilyView: View {
 }
 
 struct AddChildSheet: View {
-    let onAdd: (String, String) async -> Void
+    let onAdd: @MainActor (String, String) async -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var name = ""
     @State private var color = "#4F8EF7"

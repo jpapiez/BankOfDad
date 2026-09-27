@@ -3,7 +3,7 @@ import SwiftUI
 import UIKit
 
 struct CodeScannerView: UIViewControllerRepresentable {
-    let onCode: (String) -> Void
+    let onCode: @MainActor (String) -> Void
 
     func makeUIViewController(context: Context) -> ScannerViewController {
         let controller = ScannerViewController()
@@ -15,8 +15,8 @@ struct CodeScannerView: UIViewControllerRepresentable {
 }
 
 final class ScannerViewController: UIViewController, AVCaptureMetadataOutputObjectsDelegate {
-    var onCode: ((String) -> Void)?
-    private let session = AVCaptureSession()
+    var onCode: (@MainActor (String) -> Void)?
+    private let capture = CaptureSessionRunner()
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -26,15 +26,16 @@ final class ScannerViewController: UIViewController, AVCaptureMetadataOutputObje
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
-        if !session.isRunning { DispatchQueue.global(qos: .userInitiated).async { self.session.startRunning() } }
+        capture.start()
     }
 
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
-        if session.isRunning { session.stopRunning() }
+        capture.stop()
     }
 
     private func configure() {
+        let session = capture.session
         guard let device = AVCaptureDevice.default(for: .video), let input = try? AVCaptureDeviceInput(device: device), session.canAddInput(input) else { return }
         session.addInput(input)
         let output = AVCaptureMetadataOutput()
@@ -62,11 +63,28 @@ final class ScannerViewController: UIViewController, AVCaptureMetadataOutputObje
 
     func metadataOutput(_ output: AVCaptureMetadataOutput, didOutput metadataObjects: [AVMetadataObject], from connection: AVCaptureConnection) {
         guard let object = metadataObjects.first as? AVMetadataMachineReadableCodeObject, let value = object.stringValue else { return }
-        session.stopRunning()
+        capture.stop()
         if let url = URL(string: value), let components = URLComponents(url: url, resolvingAgainstBaseURL: false), let code = components.queryItems?.first(where: { $0.name == "code" })?.value {
             onCode?(code)
         } else {
             onCode?(value)
+        }
+    }
+
+    private final class CaptureSessionRunner {
+        let session = AVCaptureSession()
+        private let queue = DispatchQueue(label: "com.example.bankofdad.qr-scanner")
+
+        func start() {
+            queue.async { [session] in
+                if !session.isRunning { session.startRunning() }
+            }
+        }
+
+        func stop() {
+            queue.async { [session] in
+                if session.isRunning { session.stopRunning() }
+            }
         }
     }
 }

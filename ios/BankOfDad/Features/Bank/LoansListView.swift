@@ -23,6 +23,7 @@ final class LoansListViewModel {
     }
 }
 
+@MainActor
 struct LoansListView: View {
     @Environment(AppEnvironment.self) private var environment
     @State private var viewModel = LoansListViewModel()

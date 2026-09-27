@@ -48,6 +48,7 @@ final class LoanDetailViewModel {
     }
 }
 
+@MainActor
 struct LoanDetailView: View {
     let loanId: UUID
     var isKidMode: Bool
@@ -226,13 +227,13 @@ struct LoanDetailView: View {
 
 struct RecordPaymentSheet: View {
     let detail: LoanDetail
-    let onSave: (Decimal, CalendarDate, String?) async -> Void
+    let onSave: @MainActor (Decimal, CalendarDate, String?) async -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var amount: String
     @State private var paidOn = Date()
     @State private var note = ""
 
-    init(detail: LoanDetail, onSave: @escaping (Decimal, CalendarDate, String?) async -> Void) {
+    init(detail: LoanDetail, onSave: @escaping @MainActor (Decimal, CalendarDate, String?) async -> Void) {
         self.detail = detail
         self.onSave = onSave
         _amount = State(initialValue: NSDecimalNumber(decimal: detail.nextAmountDue ?? detail.balance).stringValue)
@@ -260,11 +261,11 @@ struct RecordPaymentSheet: View {
 
 struct EditDueDateSheet: View {
     let installment: Installment
-    let onSave: (CalendarDate) async -> Void
+    let onSave: @MainActor (CalendarDate) async -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var date: Date
 
-    init(installment: Installment, onSave: @escaping (CalendarDate) async -> Void) {
+    init(installment: Installment, onSave: @escaping @MainActor (CalendarDate) async -> Void) {
         self.installment = installment
         self.onSave = onSave
         _date = State(initialValue: installment.dueDate.date())

@@ -1,6 +1,7 @@
 import SwiftUI
 import UIKit
 
+@MainActor
 struct KidPairingView: View {
     @Environment(AuthSession.self) private var authSession
     @Environment(AppRouter.self) private var router

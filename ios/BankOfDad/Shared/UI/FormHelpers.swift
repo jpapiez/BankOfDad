@@ -3,7 +3,7 @@ import Foundation
 enum FormValues {
     static func decimal(_ text: String) -> Decimal {
         let normalized = text.replacingOccurrences(of: ",", with: "").trimmingCharacters(in: .whitespacesAndNewlines)
-        return Decimal(Double(normalized) ?? 0)
+        return Decimal(string: normalized) ?? 0
     }
 
     static func percentFraction(_ text: String) -> Decimal {

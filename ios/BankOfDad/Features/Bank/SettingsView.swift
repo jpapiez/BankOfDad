@@ -20,6 +20,7 @@ final class SettingsViewModel {
     }
 }
 
+@MainActor
 struct SettingsView: View {
     @Environment(AppEnvironment.self) private var environment
     @Environment(AuthSession.self) private var authSession

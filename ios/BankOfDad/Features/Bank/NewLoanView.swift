@@ -73,6 +73,7 @@ final class NewLoanViewModel {
     }
 }
 
+@MainActor
 struct NewLoanView: View {
     @Environment(AppEnvironment.self) private var environment
     @Environment(\.dismiss) private var dismiss

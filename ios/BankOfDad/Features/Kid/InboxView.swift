@@ -26,6 +26,7 @@ final class InboxViewModel {
     }
 }
 
+@MainActor
 struct InboxView: View {
     @Environment(AppEnvironment.self) private var environment
     @State private var viewModel = InboxViewModel()

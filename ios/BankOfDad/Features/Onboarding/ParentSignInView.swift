@@ -1,6 +1,7 @@
 import AuthenticationServices
 import SwiftUI
 
+@MainActor
 struct ParentSignInView: View {
     @Environment(AuthSession.self) private var authSession
     @State private var isRegistering = false

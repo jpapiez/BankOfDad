@@ -1,6 +1,7 @@
 import SwiftUI
 
 @main
+@MainActor
 struct BankOfDadApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var environment = AppEnvironment()
