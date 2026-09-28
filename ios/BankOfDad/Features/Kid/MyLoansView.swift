@@ -33,6 +33,7 @@ struct MyLoansView: View {
                             KidLoanCard(loan: loan)
                         }
                         .buttonStyle(.plain)
+                        .accessibilityIdentifier("kidLoan.\(loan.id.uuidString)")
                     }
                 }
             }

@@ -125,9 +125,13 @@ public sealed class NotificationService(BankOfDadDbContext db, IPushSender pushS
 
 public sealed class LoanSweeper(BankOfDadDbContext db, LoanStateService state, NotificationService notifications, IClock clock)
 {
-    public async Task SweepAsync(CancellationToken ct = default)
+    public Task SweepAsync(CancellationToken ct = default) => SweepCoreAsync(null, ct);
+
+    public Task SweepFamilyAsync(Guid familyId, CancellationToken ct = default) => SweepCoreAsync(familyId, ct);
+
+    private async Task SweepCoreAsync(Guid? familyId, CancellationToken ct)
     {
-        var families = await db.Families.AsNoTracking().ToListAsync(ct).ConfigureAwait(false);
+        var families = await db.Families.AsNoTracking().Where(x => familyId == null || x.Id == familyId).ToListAsync(ct).ConfigureAwait(false);
         foreach (var family in families)
         {
             var today = TodayFor(family.TimeZone);

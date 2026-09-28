@@ -9,11 +9,12 @@ struct KidSettingsView: View {
             Section("Account") {
                 if let user = authSession.currentUser {
                     LabeledContent("Name", value: user.displayName)
+                        .accessibilityIdentifier("kidSettings.name")
                     Text("If something looks wrong, ask the Bank to update it from Family settings.")
                         .foregroundStyle(.secondary)
                 }
             }
-            Section { Button("Sign out", role: .destructive) { Task { await authSession.logout() } } }
+            Section { Button("Sign out", role: .destructive) { Task { await authSession.logout() } }.accessibilityIdentifier("kidSettings.signOut") }
         }
         .navigationTitle("Settings")
     }

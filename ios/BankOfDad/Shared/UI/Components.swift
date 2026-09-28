@@ -22,6 +22,7 @@ struct ErrorBanner: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Color.red.opacity(0.12), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             .accessibilityLabel("Error: \(message)")
+            .accessibilityIdentifier("errorBanner")
     }
 }
 

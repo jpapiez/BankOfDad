@@ -19,13 +19,17 @@ struct KidPairingView: View {
                     .font(.title2.monospaced())
                     .textInputAutocapitalization(.characters)
                     .onChange(of: code) { _, newValue in code = PairingCode.display(newValue) }
+                    .accessibilityIdentifier("pairing.code")
                 TextField("Device name", text: $deviceName)
+                    .accessibilityIdentifier("pairing.deviceName")
                 Button("Join my family") { pair() }
                     .disabled(PairingCode.normalized(code).isEmpty || authSession.isAuthenticating)
+                    .accessibilityIdentifier("pairing.join")
                 if authSession.isAuthenticating { ProgressView() }
                 Button { showingScanner = true } label: {
                     Label("Scan QR code", systemImage: "qrcode.viewfinder")
                 }
+                .accessibilityIdentifier("pairing.scan")
             } header: {
                 Text("Pair this device")
             }
@@ -38,11 +42,16 @@ struct KidPairingView: View {
                 pair()
             }
         }
-        .onChange(of: router.pendingPairingCode) { _, newValue in
-            guard let newValue else { return }
-            code = PairingCode.display(newValue)
-            pair()
-        }
+        .onAppear(perform: consumePendingCode)
+        .onChange(of: router.pendingPairingCode) { _, _ in consumePendingCode() }
+    }
+
+    private func consumePendingCode() {
+        guard let pending = router.pendingPairingCode else { return }
+        // Clear it so the same link can be opened again and it doesn't linger after pairing.
+        router.pendingPairingCode = nil
+        code = PairingCode.display(pending)
+        pair()
     }
 
     private func pair() {

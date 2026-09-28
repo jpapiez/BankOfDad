@@ -43,7 +43,7 @@ struct InboxView: View {
             }
         }
         .navigationTitle("Inbox")
-        .toolbar { Button("Mark all read") { Task { await viewModel.markAll(service: environment.notificationService) } } }
+        .toolbar { Button("Mark all read") { Task { await viewModel.markAll(service: environment.notificationService) } }.accessibilityIdentifier("inbox.markAllRead") }
         .task { await viewModel.load(service: environment.notificationService) }
         .refreshable { await viewModel.load(service: environment.notificationService) }
     }
@@ -72,6 +72,8 @@ struct InboxView: View {
         }
         .padding(.vertical, 4)
         .accessibilityElement(children: .combine)
+        .accessibilityValue(notification.readAt == nil ? "Unread" : "Read")
+        .accessibilityIdentifier("inbox.\(notification.type.rawValue)")
     }
 
     private func icon(for type: NotificationType) -> String {

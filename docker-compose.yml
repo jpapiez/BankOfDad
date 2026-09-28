@@ -39,6 +39,8 @@ services:
       Apns__BundleId: ${APNS_BUNDLE_ID:-com.example.bankofdad}
       Apns__UseSandbox: ${APNS_USE_SANDBOX:-true}
       Apns__KeyPath: ${APNS_KEY_PATH:-/run/secrets/apns/AuthKey.p8}
+      # Development-only UI-test endpoints (/api/v1/testing). Ignored unless ASPNETCORE_ENVIRONMENT=Development.
+      TestHooks__Enabled: ${TEST_HOOKS_ENABLED:-false}
     ports:
       - "8080:8080"
     volumes:

@@ -442,6 +442,12 @@ api.MapDelete("/devices/{apnsToken}", async (string apnsToken, ClaimsPrincipal u
     return Results.NoContent();
 }).RequireAuthorization();
 
+if (TestHooks.IsEnabled(app.Environment, app.Configuration))
+{
+    app.Logger.LogWarning("Test hooks are enabled at /api/v1/testing. Never enable {Key} outside local development.", TestHooks.EnabledKey);
+    api.MapTestHooks();
+}
+
 await app.RunAsync();
 
 static async Task ApplyMigrationsAsync(IServiceProvider services, ILogger logger)

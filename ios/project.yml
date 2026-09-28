@@ -30,6 +30,8 @@ targets:
     scheme:
       testTargets:
         - BankOfDadTests
+        # End-to-end UI tests need the Docker backend; run them with scripts/run-ui-tests.sh.
+        - BankOfDadUITests
       gatherCoverageData: true
     info:
       path: BankOfDad/Resources/Info.plist
@@ -64,3 +66,15 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.example.bankofdad.tests
         GENERATE_INFOPLIST_FILE: YES
+  BankOfDadUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - BankOfDadUITests
+    dependencies:
+      - target: BankOfDad
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.bankofdad.uitests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: BankOfDad

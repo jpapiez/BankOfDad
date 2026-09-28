@@ -20,21 +20,27 @@ struct ParentSignInView: View {
                     .keyboardType(.emailAddress)
                     .textInputAutocapitalization(.never)
                     .textContentType(.emailAddress)
+                    .accessibilityIdentifier("signIn.email")
                 SecureField("Password", text: $password)
                     .textContentType(isRegistering ? .newPassword : .password)
+                    .accessibilityIdentifier("signIn.password")
                 if isRegistering || isAcceptingInvite {
                     TextField("Your name", text: $displayName).textContentType(.name)
+                        .accessibilityIdentifier("signIn.displayName")
                 }
                 if isRegistering {
                     TextField("Family name", text: $familyName)
+                        .accessibilityIdentifier("signIn.familyName")
                 }
                 if isAcceptingInvite {
                     TextField("Invite code", text: $inviteCode)
                         .textInputAutocapitalization(.characters)
                         .onChange(of: inviteCode) { _, newValue in inviteCode = PairingCode.display(newValue) }
+                        .accessibilityIdentifier("signIn.inviteCode")
                 }
                 Button(primaryTitle) { submit() }
                     .disabled(!canSubmit || authSession.isAuthenticating)
+                    .accessibilityIdentifier("signIn.submit")
                 if authSession.isAuthenticating { ProgressView() }
             }
 
@@ -42,9 +48,11 @@ struct ParentSignInView: View {
                 Button(isRegistering ? "I already have an account" : "Create a parent account") {
                     isRegistering.toggle(); isAcceptingInvite = false
                 }
+                .accessibilityIdentifier("signIn.toggleRegister")
                 Button(isAcceptingInvite ? "Use regular sign in" : "Join with invite code") {
                     isAcceptingInvite.toggle(); isRegistering = false
                 }
+                .accessibilityIdentifier("signIn.toggleInvite")
             }
 
             Section("Sign in with Apple") {
@@ -54,6 +62,7 @@ struct ParentSignInView: View {
                     Task { await handleApple(result) }
                 }
                 .frame(height: 46)
+                .accessibilityIdentifier("signIn.apple")
             }
         }
         .navigationTitle("Bank access")

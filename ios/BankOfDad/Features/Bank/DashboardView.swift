@@ -30,10 +30,13 @@ struct DashboardView: View {
                             .font(.headline)
                             .foregroundStyle(.secondary)
                         MoneyText(value: dashboard.totalOutstanding, font: .largeTitle.bold())
+                            .accessibilityIdentifier("dashboard.outstanding")
                         HStack {
                             Label("\(dashboard.activeLoans) active", systemImage: "checklist")
+                                .accessibilityIdentifier("dashboard.active")
                             Spacer()
                             Label("\(dashboard.lateInstallments) late", systemImage: "clock.badge.exclamationmark")
+                                .accessibilityIdentifier("dashboard.late")
                         }
                         .foregroundStyle(.secondary)
                     }
@@ -57,6 +60,7 @@ struct DashboardView: View {
                                     }
                                 }
                                 .buttonStyle(.plain)
+                                .accessibilityIdentifier("dashboard.upcoming.\(item.loanId.uuidString)")
                             }
                         }
                     }

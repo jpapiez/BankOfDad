@@ -67,6 +67,7 @@ struct LoanDetailView: View {
                     header(detail)
                     Section(isKidMode ? "Your plan" : "Terms") {
                         Text(detail.termsSummary)
+                            .accessibilityIdentifier("loanDetail.terms")
                         LabeledContent("Frequency", value: detail.frequency.label)
                         LabeledContent("Payments", value: "\(detail.installmentCount)")
                         if detail.interestEnabled { LabeledContent("APR", value: AppFormatters.percent(detail.annualRate)) }
@@ -74,7 +75,9 @@ struct LoanDetailView: View {
                     if !isKidMode {
                         Section("Notifications") {
                             Toggle("Reminders", isOn: Binding(get: { viewModel.detail?.sendReminders ?? false }, set: { viewModel.detail?.sendReminders = $0; Task { await viewModel.updateNotifications(service: environment.loanService) } }))
+                                .accessibilityIdentifier("loanDetail.reminders")
                             Toggle("Receipts", isOn: Binding(get: { viewModel.detail?.sendReceipts ?? false }, set: { viewModel.detail?.sendReceipts = $0; Task { await viewModel.updateNotifications(service: environment.loanService) } }))
+                                .accessibilityIdentifier("loanDetail.receipts")
                         }
                     }
                     schedule(detail)
@@ -82,6 +85,7 @@ struct LoanDetailView: View {
                     payments(detail)
                 }
                 .listStyle(.insetGrouped)
+                .accessibilityIdentifier("loanDetail.list")
             } else {
                 EmptyStateView(systemImage: "doc.text.magnifyingglass", title: "Loan unavailable", message: viewModel.error ?? "The loan could not be loaded.")
             }
@@ -92,7 +96,9 @@ struct LoanDetailView: View {
             if !isKidMode, viewModel.detail?.status == .active {
                 ToolbarItemGroup(placement: .topBarTrailing) {
                     Button { paymentSheet = true } label: { Label("Record Payment", systemImage: "plus.circle") }
+                        .accessibilityIdentifier("loanDetail.recordPayment")
                     Button(role: .destructive) { cancelConfirmation = true } label: { Label("Cancel Loan", systemImage: "xmark.circle") }
+                        .accessibilityIdentifier("loanDetail.cancelLoan")
                 }
             }
         }
@@ -106,6 +112,7 @@ struct LoanDetailView: View {
         }
         .confirmationDialog("Cancel this loan?", isPresented: $cancelConfirmation, titleVisibility: .visible) {
             Button("Cancel loan", role: .destructive) { Task { await viewModel.cancel(service: environment.loanService) } }
+                .accessibilityIdentifier("loanDetail.confirmCancel")
         } message: { Text("Cancelled loans stop new reminders and payments.") }
         .task { await viewModel.load(id: loanId, service: environment.loanService, kidMode: isKidMode) }
         .refreshable { await viewModel.load(id: loanId, service: environment.loanService, kidMode: isKidMode) }
@@ -118,6 +125,7 @@ struct LoanDetailView: View {
                     VStack(alignment: .leading, spacing: 6) {
                         Text(detail.childName).foregroundStyle(.secondary)
                         MoneyText(value: detail.balance, font: .largeTitle.bold())
+                            .accessibilityIdentifier("loanDetail.balance")
                         Text("balance remaining").foregroundStyle(.secondary)
                     }
                     Spacer()
@@ -125,11 +133,16 @@ struct LoanDetailView: View {
                 }
                 HStack {
                     StatusChip(text: detail.status.label, color: detail.status == .active ? .green : .secondary)
-                    if detail.lateInstallments > 0 { StatusChip(text: "\(detail.lateInstallments) late", color: .red) }
+                        .accessibilityIdentifier("loanDetail.status")
+                    if detail.lateInstallments > 0 {
+                        StatusChip(text: "\(detail.lateInstallments) late", color: .red)
+                            .accessibilityIdentifier("loanDetail.late")
+                    }
                     Spacer()
                     Text(isKidMode ? "You've paid back \(Int(progress(detail) * 100))%! 🎉" : "Paid \(AppFormatters.money(detail.amountPaid))")
                         .font(.callout)
                         .foregroundStyle(.secondary)
+                        .accessibilityIdentifier("loanDetail.paid")
                 }
             }
             .padding(.vertical, 6)
@@ -151,6 +164,8 @@ struct LoanDetailView: View {
                     }
                 }
                 .contentShape(Rectangle())
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("installment.\(installment.seq)")
                 .onTapGesture { if !isKidMode && installment.status != .paid { editInstallment = installment } }
                 .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                     if !isKidMode && installment.status != .paid {
@@ -165,6 +180,7 @@ struct LoanDetailView: View {
         Section("Late fees") {
             if detail.lateFees.isEmpty {
                 Text("No late fees").foregroundStyle(.secondary)
+                    .accessibilityIdentifier("loanDetail.noLateFees")
             } else {
                 ForEach(detail.lateFees) { fee in
                     HStack {
@@ -173,8 +189,17 @@ struct LoanDetailView: View {
                             Text(AppFormatters.timestamp(fee.assessedAt)).font(.caption).foregroundStyle(.secondary)
                         }
                         Spacer()
-                        MoneyText(value: fee.amount - fee.amountPaid)
+                        if fee.waivedAt != nil {
+                            VStack(alignment: .trailing, spacing: 4) {
+                                MoneyText(value: fee.amount).strikethrough().foregroundStyle(.secondary)
+                                StatusChip(text: "Waived", color: .green)
+                            }
+                        } else {
+                            MoneyText(value: fee.amount - fee.amountPaid)
+                        }
                     }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityIdentifier("lateFee.\(fee.installmentSeq)")
                     .swipeActions {
                         if !isKidMode && fee.waivedAt == nil {
                             Button("Waive") { Task { await viewModel.waive(lateFeeId: fee.id, service: environment.loanService) } }.tint(.green)
@@ -189,6 +214,7 @@ struct LoanDetailView: View {
         Section("Payments") {
             if detail.payments.isEmpty {
                 Text(isKidMode ? "No payments yet — you've got this." : "No payments recorded yet.").foregroundStyle(.secondary)
+                    .accessibilityIdentifier("loanDetail.noPayments")
             } else {
                 ForEach(detail.payments) { payment in
                     VStack(alignment: .leading, spacing: 6) {
@@ -204,6 +230,8 @@ struct LoanDetailView: View {
                                 .foregroundStyle(.secondary)
                         }
                     }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityIdentifier("payment.row")
                 }
             }
         }
@@ -243,16 +271,20 @@ struct RecordPaymentSheet: View {
         NavigationStack {
             Form {
                 TextField("Amount", text: $amount).keyboardType(.decimalPad)
+                    .accessibilityIdentifier("payment.amount")
                 DatePicker("Paid on", selection: $paidOn, displayedComponents: .date)
+                    .accessibilityIdentifier("payment.paidOn")
                 TextField("Note", text: $note, axis: .vertical)
+                    .accessibilityIdentifier("payment.note")
                 if FormValues.decimal(amount) > detail.balance { ErrorBanner(message: "Payment cannot exceed the remaining balance.") }
             }
             .navigationTitle("Record payment")
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() }.accessibilityIdentifier("payment.cancel") }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") { Task { await onSave(FormValues.decimal(amount), CalendarDate(paidOn), note); dismiss() } }
                         .disabled(FormValues.decimal(amount) <= 0 || FormValues.decimal(amount) > detail.balance)
+                        .accessibilityIdentifier("payment.save")
                 }
             }
         }
@@ -273,11 +305,11 @@ struct EditDueDateSheet: View {
 
     var body: some View {
         NavigationStack {
-            Form { DatePicker("Due date", selection: $date, displayedComponents: .date) }
+            Form { DatePicker("Due date", selection: $date, displayedComponents: .date).accessibilityIdentifier("dueDate.picker") }
                 .navigationTitle("Edit due date")
                 .toolbar {
-                    ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-                    ToolbarItem(placement: .confirmationAction) { Button("Save") { Task { await onSave(CalendarDate(date)); dismiss() } } }
+                    ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() }.accessibilityIdentifier("dueDate.cancel") }
+                    ToolbarItem(placement: .confirmationAction) { Button("Save") { Task { await onSave(CalendarDate(date)); dismiss() } }.accessibilityIdentifier("dueDate.save") }
                 }
         }
     }
