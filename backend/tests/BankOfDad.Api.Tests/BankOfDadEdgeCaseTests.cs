@@ -140,6 +140,30 @@ public sealed class BankOfDadEdgeCaseTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task LoanList_StatusFilter_AcceptsContractCamelCaseAndRejectsUnknownValues()
+    {
+        ResetClock();
+        var family = await CreateFamily("status-filter", childCount: 1);
+        var activeLoan = await CreateLoan(family.Parent, family.Children[0].Id);
+        var paidLoan = await CreateLoan(family.Parent, family.Children[0].Id, NewTerms(family.Children[0].Id) with { Principal = 25m, InterestEnabled = false, AnnualRate = 0m, InstallmentCount = 1 });
+        await Post<PaymentDto>($"/api/v1/loans/{paidLoan.Id}/payments", new PaymentRequest(paidLoan.Balance, Today(), "payoff"), HttpStatusCode.Created);
+        var cancelledLoan = await CreateLoan(family.Parent, family.Children[0].Id);
+        await Post<LoanDetailDto>($"/api/v1/loans/{cancelledLoan.Id}/cancel", new { });
+
+        (await Get<List<LoanSummaryDto>>("/api/v1/loans?status=active")).Select(x => x.Id).Should().BeEquivalentTo([activeLoan.Id]);
+        (await Get<List<LoanSummaryDto>>("/api/v1/loans?status=paidOff")).Select(x => x.Id).Should().BeEquivalentTo([paidLoan.Id]);
+        (await Get<List<LoanSummaryDto>>("/api/v1/loans?status=cancelled")).Select(x => x.Id).Should().BeEquivalentTo([cancelledLoan.Id]);
+        (await Get<List<LoanSummaryDto>>("/api/v1/loans?status=Active")).Select(x => x.Id).Should().BeEquivalentTo([activeLoan.Id]);
+        (await Get<List<LoanSummaryDto>>($"/api/v1/loans?status=active&childId={family.Children[0].Id}")).Select(x => x.Id).Should().BeEquivalentTo([activeLoan.Id]);
+        (await Get<List<LoanSummaryDto>>("/api/v1/loans")).Should().HaveCount(3);
+
+        foreach (var invalid in new[] { "bogus", "1", "active,paidOff" })
+        {
+            await AssertProblem(await _client.GetAsync($"/api/v1/loans?status={invalid}"), HttpStatusCode.BadRequest);
+        }
+    }
+
+    [Fact]
     public async Task RevokeKidDevices_RevokesRefreshTokenAndReportsZeroPairedDevices()
     {
         ResetClock();

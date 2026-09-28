@@ -298,11 +298,12 @@ loans.MapPost("/", async (LoanTermsInput input, ClaimsPrincipal user, BankOfDadD
     loan = await LoadLoan(db, loan.Id, user.FamilyId(), ct) ?? loan;
     return Results.Created($"/api/v1/loans/{loan.Id}", DtoMapper.LoanDetail(loan, TodayFor(await GetFamilyTimeZone(user.FamilyId(), db, ct), clock)));
 });
-loans.MapGet("/", async (LoanStatus? status, Guid? childId, ClaimsPrincipal user, BankOfDadDbContext db, IClock clock, CancellationToken ct) =>
+loans.MapGet("/", async (string? status, Guid? childId, ClaimsPrincipal user, BankOfDadDbContext db, IClock clock, CancellationToken ct) =>
 {
+    var statusFilter = ParseLoanStatus(status);
     var tz = await GetFamilyTimeZone(user.FamilyId(), db, ct);
     var query = db.Loans.IncludeAll().Where(x => x.FamilyId == user.FamilyId());
-    if (status is not null) query = query.Where(x => x.Status == status);
+    if (statusFilter is not null) query = query.Where(x => x.Status == statusFilter);
     if (childId is not null) query = query.Where(x => x.BorrowerChildId == childId);
     var list = await query.ToListAsync(ct);
     return Results.Ok(list.Select(x => DtoMapper.LoanSummary(x, TodayFor(tz, clock))).ToList());
@@ -459,6 +460,15 @@ static string Required(string? value, string name)
 {
     if (string.IsNullOrWhiteSpace(value)) throw new ApiException(400, $"{name} is required.");
     return value.Trim();
+}
+
+// Minimal API enum binding is case-sensitive; the contract uses camelCase (e.g. status=paidOff).
+static LoanStatus? ParseLoanStatus(string? value)
+{
+    if (string.IsNullOrWhiteSpace(value)) return null;
+    var name = Enum.GetNames<LoanStatus>().FirstOrDefault(x => string.Equals(x, value.Trim(), StringComparison.OrdinalIgnoreCase))
+        ?? throw new ApiException(400, "status must be one of: active, paidOff, cancelled.");
+    return Enum.Parse<LoanStatus>(name);
 }
 
 static string NormalizeEmail(string? email)
