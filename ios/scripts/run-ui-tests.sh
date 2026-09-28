@@ -70,7 +70,9 @@ if [[ $# -gt 0 ]]; then
 fi
 
 log "Running UI tests on $DESTINATION"
-# TEST_RUNNER_-prefixed variables are forwarded to the test runner. Ad-hoc signing keeps the app's keychain entitlements (CODE_SIGNING_ALLOWED=NO breaks the keychain).
+# TEST_RUNNER_-prefixed variables are forwarded to the test runner, and API_BASE_URL points the app at the
+# same backend. (ATS only allows plain HTTP to localhost/127.0.0.1.) Ad-hoc signing keeps the app's keychain
+# entitlements (CODE_SIGNING_ALLOWED=NO breaks the keychain).
 cd "$IOS_DIR"
 TEST_RUNNER_BANKOFDAD_API_URL="$API_URL" xcodebuild test \
   -project BankOfDad.xcodeproj \
@@ -78,5 +80,6 @@ TEST_RUNNER_BANKOFDAD_API_URL="$API_URL" xcodebuild test \
   -destination "$DESTINATION" \
   -derivedDataPath "$DERIVED_DATA" \
   "${only_testing[@]}" \
+  API_BASE_URL="$API_URL" \
   CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= \
   ${XCODEBUILD_EXTRA_ARGS:-}

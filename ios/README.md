@@ -49,7 +49,7 @@ The script does the following:
 |---|---|---|
 | `SIMULATOR_ID` | first available iPhone 17 Pro Max | Simulator UDID to test on |
 | `DESTINATION` | `id=$SIMULATOR_ID` | Full `xcodebuild -destination` override |
-| `API_URL` | `http://localhost:8080` | Backend URL used by the seeding client in the test runner |
+| `API_URL` | `http://localhost:8080` | Backend URL for both the app (`API_BASE_URL`) and the test runner's seeding client. Plain HTTP is only allowed to `localhost` and `127.0.0.1`. |
 | `SKIP_BACKEND=1` | off | Don't touch docker compose (the stack is already running with hooks on) |
 | `NO_BUILD=1` | off | `docker compose up` without `--build` |
 | `XCODEBUILD_EXTRA_ARGS` | — | Extra arguments passed to `xcodebuild` |

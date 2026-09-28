@@ -13,7 +13,11 @@ struct BankOfDadApp: App {
                 .environment(environment.authSession)
                 .environment(environment.router)
                 .task { await environment.authSession.bootstrap() }
-                .onOpenURL { environment.router.handle(url: $0) }
+                .onOpenURL { url in
+                    // Pairing links are ignored while someone is signed in.
+                    if case .authenticated = environment.authSession.state { return }
+                    environment.router.handle(url: url)
+                }
         }
     }
 }
