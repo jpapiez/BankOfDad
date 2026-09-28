@@ -24,7 +24,11 @@ struct RootView: View {
             }
         }
         .task(id: authSession.currentUser?.id) {
-            if authSession.currentUser != nil { await environment.pushManager.requestAuthorizationAndRegister() }
+            guard authSession.currentUser != nil else { return }
+            // A pairing link only applies to a signed-out device, so never let one linger past sign-in
+            // (it would otherwise auto-pair on the next sign-out).
+            environment.router.pendingPairingCode = nil
+            await environment.pushManager.requestAuthorizationAndRegister()
         }
     }
 }

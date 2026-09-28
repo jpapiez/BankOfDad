@@ -1,7 +1,8 @@
 import SwiftUI
 
 struct WelcomeView: View {
-    @State private var path = NavigationPath()
+    @Environment(AppRouter.self) private var router
+    @State private var showingKidPairing = false
 
     var body: some View {
         VStack(spacing: 28) {
@@ -28,14 +29,16 @@ struct WelcomeView: View {
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
                 .tint(Theme.bankAccent)
+                .accessibilityIdentifier("welcome.parent")
 
-                NavigationLink { KidPairingView() } label: {
+                Button { showingKidPairing = true } label: {
                     Label("I'm a Kid", systemImage: "sparkles")
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.large)
                 .tint(Theme.kidAccent)
+                .accessibilityIdentifier("welcome.kid")
             }
             .padding(.horizontal)
             Spacer()
@@ -43,7 +46,13 @@ struct WelcomeView: View {
         .navigationTitle("Welcome")
         .navigationBarTitleDisplayMode(.inline)
         .background(Color(.systemGroupedBackground))
+        .navigationDestination(isPresented: $showingKidPairing) { KidPairingView() }
+        // A pairing link (e.g. the parent's QR code opened by the Camera app) jumps straight to pairing.
+        .onAppear { if router.pendingPairingCode != nil { showingKidPairing = true } }
+        .onChange(of: router.pendingPairingCode) { _, newValue in
+            if newValue != nil { showingKidPairing = true }
+        }
     }
 }
 
-#Preview { NavigationStack { WelcomeView() } }
+#Preview { NavigationStack { WelcomeView() }.environment(AppRouter()) }

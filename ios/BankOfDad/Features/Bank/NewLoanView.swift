@@ -86,54 +86,75 @@ struct NewLoanView: View {
                 Picker("Child", selection: $viewModel.childId) {
                     ForEach(viewModel.family?.children ?? []) { child in Text(child.displayName).tag(Optional(child.id)) }
                 }
+                .accessibilityIdentifier("newLoan.childPicker")
                 TextField("Loan title", text: $viewModel.title)
+                    .accessibilityIdentifier("newLoan.title")
                 TextField("Principal", text: $viewModel.principal)
                     .keyboardType(.decimalPad)
+                    .accessibilityIdentifier("newLoan.principal")
             }
             Section("Payment plan") {
                 Toggle("Charge interest", isOn: $viewModel.interestEnabled)
+                    .accessibilityIdentifier("newLoan.interest")
                 if viewModel.interestEnabled {
                     TextField("APR %", text: $viewModel.annualRatePercent).keyboardType(.decimalPad)
+                        .accessibilityIdentifier("newLoan.apr")
                 }
                 Picker("Frequency", selection: $viewModel.frequency) {
                     ForEach(Frequency.selectable, id: \.self) { Text($0.label).tag($0) }
                 }
+                .accessibilityIdentifier("newLoan.frequency")
                 Stepper("\(viewModel.installmentCount) payments", value: $viewModel.installmentCount, in: 1...520)
+                    .accessibilityIdentifier("newLoan.installments")
                 DatePicker("First due date", selection: $viewModel.firstDueDate, in: Date()..., displayedComponents: .date)
+                    .accessibilityIdentifier("newLoan.firstDueDate")
             }
             Section("Late fees") {
                 Toggle("Add late fee rules", isOn: $viewModel.lateFeesEnabled)
+                    .accessibilityIdentifier("newLoan.lateFees")
                 if viewModel.lateFeesEnabled {
                     TextField("Flat amount", text: $viewModel.lateFeeFlat).keyboardType(.decimalPad)
+                        .accessibilityIdentifier("newLoan.lateFeeFlat")
                     TextField("Percent of missed payment", text: $viewModel.lateFeePercent).keyboardType(.decimalPad)
+                        .accessibilityIdentifier("newLoan.lateFeePercent")
                     Stepper("Grace days: \(viewModel.lateFeeGraceDays)", value: $viewModel.lateFeeGraceDays, in: 0...60)
+                        .accessibilityIdentifier("newLoan.graceDays")
                 }
             }
             Section("Notifications") {
                 Toggle("Remind 15 days before each payment", isOn: $viewModel.sendReminders)
+                    .accessibilityIdentifier("newLoan.reminders")
                 Toggle("Send receipts when payments are recorded", isOn: $viewModel.sendReceipts)
+                    .accessibilityIdentifier("newLoan.receipts")
             }
             Section("Review") {
                 Button("Preview schedule") { viewModel.schedulePreview(service: environment.loanService) }
                     .disabled(viewModel.input == nil)
+                    .accessibilityIdentifier("newLoan.preview")
                 if let preview = viewModel.preview {
                     LabeledContent("Payment", value: AppFormatters.money(preview.installmentAmount, currencyCode: viewModel.family?.currency ?? "USD"))
+                        .accessibilityIdentifier("newLoan.preview.payment")
                     LabeledContent("Interest", value: AppFormatters.money(preview.totalInterest, currencyCode: viewModel.family?.currency ?? "USD"))
+                        .accessibilityIdentifier("newLoan.preview.interest")
                     LabeledContent("Total repayable", value: AppFormatters.money(preview.totalRepayable, currencyCode: viewModel.family?.currency ?? "USD"))
+                        .accessibilityIdentifier("newLoan.preview.total")
                     ForEach(preview.installments.prefix(6)) { item in
                         HStack {
                             Text("#\(item.seq) • \(AppFormatters.date(item.dueDate))")
                             Spacer()
                             MoneyText(value: item.amountDue, currencyCode: viewModel.family?.currency ?? "USD")
                         }
+                        .accessibilityElement(children: .combine)
+                        .accessibilityIdentifier("newLoan.preview.installment.\(item.seq)")
                     }
                 }
                 Button(viewModel.isSaving ? "Creating…" : "Create loan") { Task { await viewModel.create(service: environment.loanService) } }
                     .disabled(viewModel.input == nil || viewModel.isSaving)
+                    .accessibilityIdentifier("newLoan.create")
             }
         }
         .navigationTitle("New loan")
-        .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
+        .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() }.accessibilityIdentifier("newLoan.cancel") } }
         .task { await viewModel.load(family: environment.familyService) }
         .onChange(of: viewModel.createdLoan?.id) { _, newValue in if newValue != nil { dismiss() } }
         .onChange(of: viewModel.title) { _, _ in viewModel.schedulePreview(service: environment.loanService) }

@@ -38,10 +38,12 @@ struct LoansListView: View {
                     Text("Paid off").tag(LoanStatus.paidOff)
                     Text("Cancelled").tag(LoanStatus.cancelled)
                 }
+                .accessibilityIdentifier("loans.statusPicker")
                 Picker("Child", selection: $viewModel.childId) {
                     Text("All children").tag(UUID?.none)
                     ForEach(viewModel.family?.children ?? []) { child in Text(child.displayName).tag(Optional(child.id)) }
                 }
+                .accessibilityIdentifier("loans.childPicker")
             }
             if viewModel.loans.isEmpty && !viewModel.isLoading {
                 EmptyStateView(systemImage: "tray", title: "No loans found", message: "Create a new loan or adjust the filters.")
@@ -50,15 +52,26 @@ struct LoansListView: View {
                     NavigationLink { LoanDetailView(loanId: loan.id, isKidMode: false) } label: {
                         LoanRow(loan: loan, currencyCode: viewModel.family?.currency ?? "USD")
                     }
+                    .accessibilityIdentifier("loanRow.\(loan.id.uuidString)")
                 }
             }
         }
         .navigationTitle("Loans")
-        .toolbar { Button { showingNewLoan = true } label: { Label("New Loan", systemImage: "plus") } }
-        .sheet(isPresented: $showingNewLoan) { NavigationStack { NewLoanView() } }
-        .task(id: viewModel.status) { await viewModel.load(loans: environment.loanService, family: environment.familyService) }
-        .task(id: viewModel.childId) { await viewModel.load(loans: environment.loanService, family: environment.familyService) }
+        .toolbar { Button { showingNewLoan = true } label: { Label("New Loan", systemImage: "plus") }.accessibilityIdentifier("loans.new") }
+        .sheet(isPresented: $showingNewLoan, onDismiss: reload) { NavigationStack { NewLoanView() } }
+        .task(id: LoanFilter(status: viewModel.status, childId: viewModel.childId)) { await viewModel.load(loans: environment.loanService, family: environment.familyService) }
         .refreshable { await viewModel.load(loans: environment.loanService, family: environment.familyService) }
+    }
+}
+
+private struct LoanFilter: Hashable {
+    let status: LoanStatus
+    let childId: UUID?
+}
+
+extension LoansListView {
+    private func reload() {
+        Task { await viewModel.load(loans: environment.loanService, family: environment.familyService) }
     }
 }
 

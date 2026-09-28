@@ -58,35 +58,45 @@ struct FamilyView: View {
                             Text("\(child.pairedDeviceCount) paired device\(child.pairedDeviceCount == 1 ? "" : "s")")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
+                                .accessibilityIdentifier("family.child.\(child.displayName).devices")
                         }
                         Spacer()
                         Menu {
                             Button("Generate pairing code") { Task { await viewModel.generatePairing(childId: child.id, service: environment.familyService) } }
+                                .accessibilityIdentifier("family.generatePairing")
                             Button("Revoke devices", role: .destructive) { Task { await viewModel.revokeDevices(childId: child.id, service: environment.familyService) } }
+                                .accessibilityIdentifier("family.revokeDevices")
                         } label: { Image(systemName: "ellipsis.circle").frame(width: 44, height: 44) }
                         .accessibilityLabel("Actions for \(child.displayName)")
+                        .accessibilityIdentifier("family.child.\(child.displayName).actions")
                     }
                 }
                 Button { addingChild = true } label: { Label("Add child", systemImage: "plus") }
+                    .accessibilityIdentifier("family.addChild")
             }
             Section("Co-parents") {
                 ForEach(viewModel.family?.parents ?? []) { parent in
                     Label(parent.displayName, systemImage: "person.fill")
+                        .accessibilityIdentifier("family.parent.\(parent.displayName)")
                 }
                 TextField("Invite email (optional)", text: $inviteEmail)
                     .keyboardType(.emailAddress)
                     .textInputAutocapitalization(.never)
+                    .accessibilityIdentifier("family.inviteEmail")
                 Button("Invite co-parent") { Task { await viewModel.invite(email: inviteEmail, service: environment.familyService) } }
+                    .accessibilityIdentifier("family.invite")
                 if let invite = viewModel.invite {
                     ShareLink(item: invite.inviteCode) {
                         Label("Share invite \(invite.inviteCode)", systemImage: "square.and.arrow.up")
                     }
+                    .accessibilityIdentifier("family.inviteShare")
+                    .accessibilityValue(invite.inviteCode)
                     Text("Expires \(AppFormatters.timestamp(invite.expiresAt))").font(.caption).foregroundStyle(.secondary)
                 }
             }
         }
         .navigationTitle(viewModel.family?.name ?? "Family")
-        .toolbar { Button { addingChild = true } label: { Label("Add child", systemImage: "person.badge.plus") } }
+        .toolbar { Button { addingChild = true } label: { Label("Add child", systemImage: "person.badge.plus") }.accessibilityIdentifier("family.addChildToolbar") }
         .sheet(isPresented: $addingChild) { AddChildSheet { name, color in await viewModel.addChild(name: name, color: color, service: environment.familyService) } }
         .sheet(item: $viewModel.pairing) { response in PairingCodeSheet(response: response) }
         .task { await viewModel.load(service: environment.familyService) }
@@ -105,16 +115,18 @@ struct AddChildSheet: View {
         NavigationStack {
             Form {
                 TextField("Child name", text: $name)
+                    .accessibilityIdentifier("addChild.name")
                 Picker("Avatar color", selection: $color) {
                     ForEach(colors, id: \.self) { hex in
                         HStack { Circle().fill(Color(hex: hex) ?? .blue).frame(width: 18, height: 18); Text(hex) }.tag(hex)
                     }
                 }
+                .accessibilityIdentifier("addChild.color")
             }
             .navigationTitle("Add child")
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) { Button("Add") { Task { await onAdd(name, color); dismiss() } }.disabled(name.isEmpty) }
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() }.accessibilityIdentifier("addChild.cancel") }
+                ToolbarItem(placement: .confirmationAction) { Button("Add") { Task { await onAdd(name, color); dismiss() } }.disabled(name.isEmpty).accessibilityIdentifier("addChild.add") }
             }
         }
     }
@@ -132,6 +144,7 @@ struct PairingCodeSheet: View {
                 Text(PairingCode.display(response.code))
                     .font(.system(.largeTitle, design: .monospaced).bold())
                     .textSelection(.enabled)
+                    .accessibilityIdentifier("pairingSheet.code")
                 if let image = QRCode.makeImage(from: response.qrPayload) {
                     Image(uiImage: image)
                         .interpolation(.none)
@@ -139,15 +152,18 @@ struct PairingCodeSheet: View {
                         .scaledToFit()
                         .frame(width: 220, height: 220)
                         .accessibilityLabel("Pairing QR code")
+                        .accessibilityIdentifier("pairingSheet.qr")
                 }
                 Text("Expires in \(remainingSeconds) seconds")
                     .foregroundStyle(remainingSeconds < 60 ? .red : .secondary)
+                    .accessibilityIdentifier("pairingSheet.expires")
                 ShareLink(item: response.qrPayload) { Label("Share pairing link", systemImage: "square.and.arrow.up") }
+                    .accessibilityIdentifier("pairingSheet.share")
                 Spacer()
             }
             .padding()
             .navigationTitle("Pair child")
-            .toolbar { Button("Done") { dismiss() } }
+            .toolbar { Button("Done") { dismiss() }.accessibilityIdentifier("pairingSheet.done") }
             .onReceive(timer) { now = $0 }
         }
     }

@@ -18,6 +18,7 @@ final class AppEnvironment {
         let baseURL = Self.baseURLFromInfoPlist()
         let vault = TokenVault()
         let keychain = KeychainStore()
+        UITestHooks.prepareKeychain(keychain)
         let authFailureHandler = AuthFailureHandler()
         self.vault = vault
         self.keychain = keychain

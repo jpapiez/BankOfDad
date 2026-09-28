@@ -130,6 +130,7 @@ jobs:
           -scheme BankOfDad
           -destination "id=${{ steps.sim.outputs.udid }}"
           -resultBundlePath "$RUNNER_TEMP/BankOfDad.xcresult"
+          -skip-testing:BankOfDadUITests
           CODE_SIGNING_ALLOWED=NO
           | tee "$RUNNER_TEMP/xcodebuild.log"
 

@@ -61,6 +61,10 @@ dotnet test backend
 
 The API integration tests start a throwaway PostgreSQL container with Testcontainers, so Docker must be running.
 
+### Development test hooks
+
+For end-to-end UI tests the API can expose `/api/v1/testing/*` endpoints that backdate a loan's due dates and run the reminder / late-fee sweep immediately (see [`docs/api-contract.md`](docs/api-contract.md#testing-hooks-development-only-parent-only-callers-family-only)). They are mapped only when `ASPNETCORE_ENVIRONMENT=Development` **and** `TEST_HOOKS_ENABLED=true`. Both default to off in `docker-compose.yml`. `ios/scripts/run-ui-tests.sh` turns them on for its run. Never enable them in production.
+
 ### Push notifications (optional)
 
 When `APNS_KEY_ID` is empty the API only logs notifications. To send real pushes, put your APNs `.p8` key at `./secrets/AuthKey.p8` (mounted read-only into the container), and set `APNS_KEY_ID`, `APNS_TEAM_ID`, `APNS_BUNDLE_ID`, and `APNS_USE_SANDBOX` in `.env`.
@@ -94,7 +98,7 @@ Apple setup checklist:
 |---|---|
 | **Backend build & test** | Release build of `backend/BankOfDad.slnx` with compiler warnings as errors, then all domain and Testcontainers integration tests (TRX results uploaded as an artifact). |
 | **Docker compose smoke test** | `docker compose build` and `up`, then waits for `GET /health` to return `Healthy`. |
-| **iOS build & test** | On `macos-15`: `xcodegen generate`, then `xcodebuild test` of the `BankOfDad` scheme on the newest available iPhone simulator, with code signing disabled. |
+| **iOS build & test** | On `macos-15`: `xcodegen generate`, then `xcodebuild test` of the `BankOfDad` scheme on the newest available iPhone simulator, with code signing disabled. The end-to-end `BankOfDadUITests` are skipped because they need the Docker backend; run them locally with `ios/scripts/run-ui-tests.sh`. |
 
 To make these required for merging, add the three job names above as required status checks in the branch protection rule (or ruleset) for `main`.
 ## Key rules

@@ -34,6 +34,7 @@ final class PushManager: NSObject, UNUserNotificationCenterDelegate {
     }
 
     func requestAuthorizationAndRegister() async {
+        guard !UITestHooks.skipPushRegistration else { return }
         do {
             let granted = try await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound])
             guard granted else { return }

@@ -32,16 +32,21 @@ struct SettingsView: View {
             Section("Account") {
                 if let user = authSession.currentUser {
                     LabeledContent("Name", value: user.displayName)
-                    if let email = user.email { LabeledContent("Email", value: email) }
+                        .accessibilityIdentifier("settings.name")
+                    if let email = user.email { LabeledContent("Email", value: email).accessibilityIdentifier("settings.email") }
                     LabeledContent("Role", value: user.role.rawValue)
+                        .accessibilityIdentifier("settings.role")
                 }
             }
             Section("Family") {
                 TextField("Family name", text: $viewModel.name)
+                    .accessibilityIdentifier("settings.familyName")
                 TextField("Time zone", text: $viewModel.timeZone)
+                    .accessibilityIdentifier("settings.timeZone")
                 Button("Save changes") { Task { await viewModel.save(service: environment.familyService) } }
+                    .accessibilityIdentifier("settings.save")
             }
-            Section { Button("Sign out", role: .destructive) { Task { await authSession.logout() } } }
+            Section { Button("Sign out", role: .destructive) { Task { await authSession.logout() } }.accessibilityIdentifier("settings.signOut") }
         }
         .navigationTitle("Settings")
         .task { await viewModel.load(service: environment.familyService) }

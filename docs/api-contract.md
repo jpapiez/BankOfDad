@@ -140,6 +140,14 @@ Password rules: min 8 chars. Emails unique, case-insensitive.
 ### Health
 `GET /health` → 200 `Healthy` (checks DB).
 
+### Testing hooks (Development only, parent only, caller's family only)
+These routes exist **only** when `ASPNETCORE_ENVIRONMENT=Development` **and** `TestHooks:Enabled=true` (`TestHooks__Enabled` / `TEST_HOOKS_ENABLED` in docker compose, default `false`). In every other configuration they are not mapped, so requests get 404. The iOS UI test suite uses them. **Never enable them in production.**
+
+| Method | Route | Body | Response |
+|---|---|---|---|
+| POST | `/api/v1/testing/loans/{loanId}/backdate` | `{ days }` (1–3650) | `LoanDetailDto`: shifts `firstDueDate` and every installment due date `days` earlier so installments become due or late. 404 if the loan is not in the caller's family. |
+| POST | `/api/v1/testing/sweep` | — | 204: runs the reminder / late-fee sweep (normally the hourly background job) for the caller's family now. |
+
 ## Business rules (authoritative)
 1. **Amortization**: periods per year = 52 (weekly), 26 (biweekly), 12 (monthly). r = annualRate / periodsPerYear.
    Payment = P·r / (1 − (1+r)^−n), or P/n when r = 0 or interest disabled. Round payment to cents (MidpointRounding.AwayFromZero).
