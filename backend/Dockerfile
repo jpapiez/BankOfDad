@@ -1,7 +1,8 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 COPY . .
-RUN dotnet restore BankOfDad.slnx
+ARG NUGET_SOURCE=https://api.nuget.org/v3/index.json
+RUN dotnet restore BankOfDad.slnx --source "$NUGET_SOURCE"
 RUN dotnet publish src/BankOfDad.Api/BankOfDad.Api.csproj -c Release -o /app/publish --no-restore
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final

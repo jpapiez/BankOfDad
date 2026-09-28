@@ -51,6 +51,8 @@ curl http://localhost:8080/health   # -> Healthy
 
 Database migrations are applied automatically when the API starts. To stop: `docker compose down` (add `-v` to wipe the database volume).
 
+If `api.nuget.org` is blocked on your network, set `NUGET_SOURCE` in `.env` (or the environment) to a reachable NuGet v3 feed before building; the Docker build restores packages from it.
+
 ### Tests
 
 ```powershell
