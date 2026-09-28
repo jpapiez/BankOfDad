@@ -84,6 +84,17 @@ Apple setup checklist:
 
 > **Note:** the iOS sources were written on Windows and have not yet been compiled. Please build and run the tests in Xcode before relying on them. The areas most worth checking first are: `@Observable` objects injected through the SwiftUI environment, `SignInWithAppleButton` handling, the AVFoundation QR scanner, CoreImage QR generation, and the `URLProtocol`-based `APIClient` tests.
 
+## Continuous integration
+
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs on every pull request and on pushes to `main`:
+
+| Job | What it checks |
+|---|---|
+| **Backend build & test** | Release build of `backend/BankOfDad.slnx` with compiler warnings as errors, then all domain and Testcontainers integration tests (TRX results uploaded as an artifact). |
+| **Docker compose smoke test** | `docker compose build` and `up`, then waits for `GET /health` to return `Healthy`. |
+| **iOS build & test** | On `macos-15`: `xcodegen generate`, then `xcodebuild test` of the `BankOfDad` scheme on the newest available iPhone simulator, with code signing disabled. |
+
+To make these required for merging, add the three job names above as required status checks in the branch protection rule (or ruleset) for `main`.
 ## Key rules
 
 - Money is stored as `numeric(18,2)` (rates and percentages as `numeric(9,6)` fractions) and rounded half-away-from-zero to cents. Loan schedules use standard amortization; the last installment absorbs rounding. For example, $300 at 5% APR over 6 monthly payments gives $50.73 per installment, $4.39 total interest, and $304.39 total repayable.

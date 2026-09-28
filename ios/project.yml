@@ -27,6 +27,10 @@ targets:
         CODE_SIGN_ENTITLEMENTS: BankOfDad/Resources/BankOfDad.entitlements
         CURRENT_PROJECT_VERSION: 1
         MARKETING_VERSION: 1.0
+    scheme:
+      testTargets:
+        - BankOfDadTests
+      gatherCoverageData: true
     info:
       path: BankOfDad/Resources/Info.plist
       properties:
