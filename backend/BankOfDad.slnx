@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/BankOfDad.Api/BankOfDad.Api.csproj" />
+    <Project Path="src/BankOfDad.Domain/BankOfDad.Domain.csproj" />
+    <Project Path="src/BankOfDad.Infrastructure/BankOfDad.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/BankOfDad.Api.Tests/BankOfDad.Api.Tests.csproj" />
+    <Project Path="tests/BankOfDad.Domain.Tests/BankOfDad.Domain.Tests.csproj" />
+  </Folder>
+</Solution>

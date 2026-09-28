@@ -1,0 +1,10 @@
+**/bin/
+**/obj/
+.git/
+.vs/
+TestResults/
+build.log
+*.csx
+**/*.user
+**/*.suo
+secrets/

@@ -1,0 +1,144 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend build & test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore
+        run: dotnet restore BankOfDad.slnx
+
+      # Compiler warnings fail the build; NuGet vulnerability audit warnings stay warnings.
+      - name: Build
+        run: >-
+          dotnet build BankOfDad.slnx --configuration Release --no-restore
+          -p:TreatWarningsAsErrors=true
+          "-p:WarningsNotAsErrors=NU1901%3BNU1902%3BNU1903%3BNU1904"
+
+      # API integration tests use Testcontainers, which relies on the runner's Docker daemon.
+      - name: Test
+        run: >-
+          dotnet test BankOfDad.slnx --configuration Release --no-build
+          --logger "trx;LogFilePrefix=results"
+          --results-directory "${{ github.workspace }}/test-results"
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-test-results
+          path: test-results
+          if-no-files-found: ignore
+
+  docker:
+    name: Docker compose smoke test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build images
+        run: docker compose build
+
+      - name: Start stack
+        run: docker compose up -d
+
+      - name: Wait for /health
+        run: |
+          for _ in $(seq 1 60); do
+            if [ "$(curl -fsS http://localhost:8080/health 2>/dev/null)" = "Healthy" ]; then
+              echo "API is healthy"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "API did not become healthy in time"
+          exit 1
+
+      - name: Show logs
+        if: failure()
+        run: docker compose logs --no-color
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v
+
+  ios:
+    name: iOS build & test
+    runs-on: macos-15
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: ios
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show Xcode version
+        run: xcodebuild -version
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Pick simulator
+        id: sim
+        run: |
+          udid=$(xcrun simctl list devices available --json | python3 -c '
+          import json, sys
+          devices = json.load(sys.stdin)["devices"]
+          for runtime in sorted(devices, reverse=True):
+              if ".iOS-" not in runtime:
+                  continue
+              for device in devices[runtime]:
+                  if device["name"].startswith("iPhone"):
+                      print(device["udid"])
+                      sys.exit(0)
+          sys.exit("No available iPhone simulator found")
+          ')
+          echo "Using simulator $udid"
+          echo "udid=$udid" >> "$GITHUB_OUTPUT"
+
+      - name: Build and test
+        run: >-
+          xcodebuild test
+          -project BankOfDad.xcodeproj
+          -scheme BankOfDad
+          -destination "id=${{ steps.sim.outputs.udid }}"
+          -resultBundlePath "$RUNNER_TEMP/BankOfDad.xcresult"
+          CODE_SIGNING_ALLOWED=NO
+          | tee "$RUNNER_TEMP/xcodebuild.log"
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-test-results
+          path: |
+            ${{ runner.temp }}/BankOfDad.xcresult
+            ${{ runner.temp }}/xcodebuild.log
+          if-no-files-found: ignore
