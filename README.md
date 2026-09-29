@@ -71,7 +71,7 @@ When `APNS_KEY_ID` is empty the API only logs notifications. To send real pushes
 
 ## Hosting at home (Tailscale)
 
-To run the backend on an always-on Linux box or Raspberry Pi, use [`deploy/`](deploy/README.md). Family iPhones reach it at `https://bankofdad.<tailnet>.ts.net` over Tailscale, at home or away, with a trusted certificate. It runs the prebuilt multi-arch image from GHCR in Production mode and publishes nothing on the LAN.
+To run the backend on an always-on Linux box or Raspberry Pi, use [`deploy/`](deploy/README.md). Family iPhones reach it at `https://bankofdad.<tailnet>.ts.net` over Tailscale, at home or away, with a trusted certificate. It runs the prebuilt multi-arch image from GHCR in Production mode and publishes nothing on the LAN. To run the same stack on a small Azure VM instead (about $13/month), see [`deploy/azure/`](deploy/azure/README.md).
 
 ## Running the iOS app
 

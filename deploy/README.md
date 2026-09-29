@@ -1,6 +1,6 @@
 # Hosting Bank of Dad at home (Tailscale)
 
-Run the backend on an always-on Linux box or Raspberry Pi and reach it from every family iPhone, at home or away, with trusted HTTPS:
+Run the backend on an always-on Linux box or Raspberry Pi and reach it from every family iPhone, at home or away, with trusted HTTPS. No spare hardware? Run the same stack on a small Azure VM with [`azure/`](azure/README.md).
 
 ```mermaid
 flowchart LR

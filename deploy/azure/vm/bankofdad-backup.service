@@ -1,0 +1,8 @@
+[Unit]
+Description=Back up the Bank of Dad database to Blob storage
+Requires=docker.service
+After=docker.service bankofdad.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/bankofdad/backup.sh
