@@ -17,7 +17,7 @@ The app target is `BankOfDad`. Unit tests live in `BankOfDadTests`, and end-to-e
 
 1. From the repository root, start the backend stack with Docker according to the root README/backend instructions.
 2. In Xcode, run the app on an iOS 17 simulator. The default `API_BASE_URL` build setting is `http://localhost:8080`, and the simulator can reach that directly.
-3. On a physical device, override `API_BASE_URL` in an `.xcconfig` or scheme environment/build setting to your Mac LAN IP, for example `http://192.168.1.42:8080`.
+3. To use another backend, for example the [Tailscale-hosted server](../deploy/README.md) on a physical device, copy `Config/Local.xcconfig.example` to `Config/Local.xcconfig` (gitignored) and set `API_BASE_URL = https:/$()/bankofdad.<tailnet>.ts.net`. The next build uses it. `API_BASE_URL` defaults to `http://localhost:8080` in `Config/App.xcconfig`. App Transport Security only allows plain HTTP to `localhost` and `127.0.0.1`, so remote servers must use HTTPS, which the Tailscale setup provides.
 
 ## Push notifications
 

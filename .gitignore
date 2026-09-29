@@ -22,6 +22,7 @@ secrets/
 # Xcode / iOS
 ios/*.xcodeproj/
 ios/*.xcworkspace/
+ios/Config/Local.xcconfig
 xcuserdata/
 DerivedData/
 *.xcuserstate
