@@ -27,7 +27,10 @@ param osDiskSizeGB int = 30
 param adminUsername string = 'azureuser'
 
 @description('SSH public key for adminUsername. No inbound ports are open, so this is only usable from inside the VNet or over the serial console.')
-param sshPublicKey string
+param sshPublicKey string = ''
+
+@description('True when the VM already exists. Azure can\'t change customData or SSH keys on an existing VM, so osProfile is left out on redeploys. deploy.sh sets this.')
+param vmExists bool = false
 
 @description('Days to keep nightly database backups in Blob storage.')
 @minValue(1)
@@ -134,7 +137,7 @@ resource vm 'Microsoft.Compute/virtualMachines@2024-07-01' = {
         }
       }
     }
-    osProfile: {
+    osProfile: vmExists ? null : {
       computerName: namePrefix
       adminUsername: adminUsername
       customData: base64(cloudInit)

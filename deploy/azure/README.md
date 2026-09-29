@@ -46,7 +46,7 @@ These are pay-as-you-go prices in West US 2 at the time of writing. Check the [p
   - the VM: Ubuntu 24.04 LTS, Trusted Launch, SSH keys only, a system-assigned managed identity, and boot diagnostics, which also enables the serial console;
   - a storage account with shared-key access disabled, a `backups` container and a lifecycle rule that deletes old backups;
   - a role assignment that lets the VM's identity write to that container.
-- **`cloud-init.yaml`** runs on first boot. It installs Docker Engine from Docker's apt repository and adds a 2 GiB swapfile. It also sets up unattended upgrades for Ubuntu security updates and Docker Engine, rebooting at 11:00 UTC when an update requires it.
+- **`cloud-init.yaml`** runs on first boot. It installs Docker Engine from Docker's apt repository and adds a 2 GiB swapfile. It also sets up unattended upgrades for Ubuntu security updates and Docker Engine, rebooting at 11:00 UTC when an update requires it. Azure fixes this file and the SSH key when the VM is created, so re-running `deploy.sh` doesn't reapply them; to pick up changes, back up, delete the VM, deploy again and restore.
 - **`update.sh`** bundles the compose file, the Tailscale serve config, [`vm/`](vm) and your settings, and runs [`vm/apply.sh`](vm/apply.sh) on the VM. `apply.sh`:
   - installs everything into `/opt/bankofdad`;
   - generates the Postgres password and JWT key the first time (they never leave the VM);
@@ -95,7 +95,7 @@ Then [point the app at that URL](../README.md#4-point-the-app-at-the-server).
 | `AZ_NAME_PREFIX` | `bankofdad` | Prefix for resource names. |
 | `AZ_VM_SIZE` | `Standard_B2ats_v2` | VM size. |
 | `AZ_OS_IMAGE_SKU` | `server` | Use `server-arm64` for Arm sizes. |
-| `SSH_PUBLIC_KEY` or `SSH_PUBLIC_KEY_FILE` | `~/.ssh/id_ed25519.pub` | Admin SSH key. Azure requires one. |
+| `SSH_PUBLIC_KEY` or `SSH_PUBLIC_KEY_FILE` | `~/.ssh/id_ed25519.pub` | Admin SSH key. Azure requires one. Only used when the VM is created; later runs ignore it. |
 | `BACKUP_RETENTION_DAYS` | `30` | Days to keep backups. |
 | `TS_AUTHKEY` | | Tailscale auth key (use a one-off key). Required for the first deploy; not needed once the node has joined. |
 | `TS_HOSTNAME` | `bankofdad` | Node name, which becomes `https://<name>.<tailnet>.ts.net`. |
