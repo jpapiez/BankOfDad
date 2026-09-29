@@ -6,6 +6,15 @@ set -euo pipefail
 src=$(cd "$(dirname "$0")" && pwd)
 app=/opt/bankofdad
 
+ghcr_logged_in=
+cleanup() {
+  if [[ -n $ghcr_logged_in ]]; then docker logout ghcr.io >/dev/null 2>&1 || true; fi
+  # The Azure agent keeps a copy of every run-command script, and ours embeds this bundle
+  # (settings can include TS_AUTHKEY or a GHCR token). Settings stay in $app, readable by root only.
+  rm -f /var/lib/waagent/run-command/download/*/script.sh
+}
+trap cleanup EXIT
+
 # On a new VM, wait for cloud-init to finish installing Docker.
 cloud-init status --wait >/dev/null 2>&1 || true
 command -v docker >/dev/null || { echo "Docker is missing; check 'cloud-init status --long' on the VM." >&2; exit 1; }
@@ -31,6 +40,8 @@ fi
 if [[ -f $src/ghcr.env ]]; then
   { read -r ghcr_user; read -r ghcr_token; } < "$src/ghcr.env"
   docker login ghcr.io -u "$ghcr_user" --password-stdin <<<"$ghcr_token" >/dev/null
+  # Only for this run's pull (see cleanup); don't leave the token in /root/.docker.
+  ghcr_logged_in=1
 fi
 
 install -m 0644 "$src/bankofdad.service" "$src/bankofdad-backup.service" "$src/bankofdad-backup.timer" /etc/systemd/system/
@@ -57,7 +68,8 @@ state=$(jq -r '.BackendState // "unknown"' <<<"$ts")
 echo "Tailscale: $state"
 case $state in
   Running) echo "URL: https://$(jq -r '.Self.DNSName' <<<"$ts" | sed 's/\.$//')" ;;
-  NeedsLogin) echo "Approve the node at: $(jq -r '.AuthURL // "(see docker compose logs tailscale)"' <<<"$ts")" ;;
+  # Without an auth key the container retries login every minute with a new URL, so a key is required.
+  NeedsLogin|NoState) echo "Tailscale is not logged in: set TS_AUTHKEY to a fresh auth key and run update.sh again." ;;
 esac
 
 [[ $health == Healthy ]] || { echo "The API is not healthy; check 'docker compose logs api' on the VM." >&2; exit 1; }

@@ -97,7 +97,7 @@ Then [point the app at that URL](../README.md#4-point-the-app-at-the-server).
 | `AZ_OS_IMAGE_SKU` | `server` | Use `server-arm64` for Arm sizes. |
 | `SSH_PUBLIC_KEY` or `SSH_PUBLIC_KEY_FILE` | `~/.ssh/id_ed25519.pub` | Admin SSH key. Azure requires one. |
 | `BACKUP_RETENTION_DAYS` | `30` | Days to keep backups. |
-| `TS_AUTHKEY` | | Tailscale auth key. Only needed until the node has joined. |
+| `TS_AUTHKEY` | | Tailscale auth key (use a one-off key). Required for the first deploy; not needed once the node has joined. |
 | `TS_HOSTNAME` | `bankofdad` | Node name, which becomes `https://<name>.<tailnet>.ts.net`. |
 | `TS_EXTRA_ARGS` | | For example `--advertise-tags=tag:bankofdad`. |
 | `BANKOFDAD_IMAGE` | `ghcr.io/jpapiez/bankofdad-api:latest` | Pin `:sha-<short sha>` to hold a version. |
@@ -144,7 +144,7 @@ Restoring onto a new VM works the same way. The new VM generates a new JWT key, 
 | Logs and status | `vm 'cd /opt/bankofdad && docker compose ps && docker compose logs --tail 50 api tailscale'` |
 | A shell | Use the [serial console](https://learn.microsoft.com/troubleshoot/azure/virtual-machines/linux/serial-console-linux) in the Azure portal. The admin user has no password, so set one first with **Help → Reset password** in the portal. |
 | First boot still running | `apply.sh` waits for cloud-init. Check its progress with `vm 'cloud-init status --long'`. |
-| `Tailscale: NeedsLogin` | Open the printed URL to approve the node, or set a fresh `TS_AUTHKEY` and run `update.sh`. |
+| `Tailscale is not logged in` | Set a fresh `TS_AUTHKEY` and run `update.sh`. Interactive login links don't work here: without a key, the container restarts every minute with a new node key. |
 | `update.sh` says another run command is in progress | Only one run command can run at a time. Wait a minute and try again. |
 
 See also the [home-server troubleshooting](../README.md#troubleshooting).
