@@ -8,8 +8,10 @@ flowchart LR
     App["Bank of Dad app"]
   end
   subgraph Box["Linux box / Raspberry Pi (docker compose)"]
-    TS["tailscale<br/>serve :443 (HTTPS, *.ts.net cert)"]
-    API["api<br/>ASP.NET Core (Production)"]
+    subgraph NS["shared network (netns)"]
+      TS["tailscale<br/>serve :443 (HTTPS, *.ts.net cert)"]
+      API["api<br/>ASP.NET Core (Production)"]
+    end
     DB[("postgres")]
   end
   App -- "https://bankofdad.tailnet.ts.net" --> TS
@@ -106,5 +108,5 @@ docker compose exec -T db pg_restore -U bankofdad -d bankofdad --clean --if-exis
 | `docker compose logs tailscale` shows a login URL or `NeedsLogin` | The auth key is missing, used or expired. Set a fresh `TS_AUTHKEY` and run `docker compose up -d`, or open the printed URL to approve the node. |
 | The node vanished from the tailnet after months | Its key expired. Disable key expiry or tag the node (step 1), then re-authenticate as above. |
 | Certificate or HTTPS errors in the app | Enable **HTTPS Certificates** in the tailnet DNS settings, and use the full `https://<node>.<tailnet>.ts.net` name. |
-| The API is unreachable after restarting only the `tailscale` container | The API shares that container's network. Run `docker compose up -d` to re-attach it. |
+| The API is unreachable after the `netns` container was restarted by hand | `tailscale` and `api` share `netns`'s network. Run `docker compose restart tailscale api` to re-attach them. Restarting `tailscale` or `api` on their own is safe. |
 | Start over with a new Tailscale identity | `docker compose down && docker volume rm bankofdad_tailscale-state`, then `docker compose up -d` with a fresh key. |

@@ -19,11 +19,24 @@ services:
       timeout: 5s
       retries: 10
 
+  # Owns the network namespace that tailscale and api share (like a Kubernetes pod's pause container).
+  # Neither of them owns it, so either can crash and restart without leaving the other on a dead network.
+  netns:
+    image: registry.k8s.io/pause:3.10
+    hostname: ${TS_HOSTNAME:-bankofdad}
+    restart: unless-stopped
+    # Loopback only, for health checks on the box itself.
+    ports:
+      - "127.0.0.1:${API_LOCAL_PORT:-8080}:8080"
+
   # Joins the tailnet as TS_HOSTNAME and serves HTTPS (auto-provisioned *.ts.net certificate) to the API.
   tailscale:
     image: tailscale/tailscale:stable
-    hostname: ${TS_HOSTNAME:-bankofdad}
     restart: unless-stopped
+    network_mode: service:netns
+    depends_on:
+      netns:
+        condition: service_started
     environment:
       TS_AUTHKEY: ${TS_AUTHKEY:-}
       TS_AUTH_ONCE: "true"
@@ -34,20 +47,16 @@ services:
     volumes:
       - tailscale-state:/var/lib/tailscale
       - ./tailscale/serve.json:/config/serve.json:ro
-    # Loopback only, for health checks on the box itself. The API shares this container's network.
-    ports:
-      - "127.0.0.1:${API_LOCAL_PORT:-8080}:8080"
 
   api:
     image: ${BANKOFDAD_IMAGE:-ghcr.io/jpapiez/bankofdad-api:latest}
     restart: unless-stopped
-    network_mode: service:tailscale
+    network_mode: service:netns
     depends_on:
+      netns:
+        condition: service_started
       db:
         condition: service_healthy
-      tailscale:
-        condition: service_started
-        restart: true
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       ASPNETCORE_HTTP_PORTS: "8080"
