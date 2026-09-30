@@ -29,7 +29,7 @@ TestFlight installs the app on real iPhones without an App Store listing. You ne
    - `API_BASE_URL`: your server, e.g. `https:/$()/bankofdad.<tailnet>.ts.net`;
    - `BANKOFDAD_BUNDLE_ID`: a reverse-DNS ID you own, e.g. `com.yourname.bankofdad`. It's permanent once the app exists in App Store Connect;
    - `DEVELOPMENT_TEAM`: your team ID, from developer.apple.com > Account > Membership details.
-2. **Xcode:** sign in under Xcode > Settings > Accounts.
+2. **Xcode:** sign in under Xcode > Settings > Accounts. If your team has never had a device registered, connect your iPhone and run the app from Xcode once first. Archiving needs a development profile, and Apple only issues one when the team has at least one device.
 3. **Register the bundle ID:** run `UPLOAD=0 ./scripts/testflight.sh` once. Xcode's automatic signing registers the ID with the Sign in with Apple and Push Notifications capabilities.
 4. **App Store Connect:** under Apps, click + > New App. Choose iOS, pick your bundle ID, and enter any SKU. The name must be unique across the App Store, but the home-screen name stays "Bank of Dad".
 5. **Server:** set `APPLE_CLIENT_ID` and `APNS_BUNDLE_ID` to the bundle ID. For push, create an APNs key (Certificates, IDs & Profiles > Keys, choosing Sandbox & Production). Set `APNS_KEY_ID`, set `APNS_TEAM_ID`, and install the `.p8`. Set `APNS_USE_SANDBOX=false`, because TestFlight builds register production push tokens.
