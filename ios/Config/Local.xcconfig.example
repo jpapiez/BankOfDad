@@ -2,3 +2,8 @@
 
 // Tailscale-hosted backend (see deploy/README.md). Every family device must be on the tailnet.
 API_BASE_URL = https:/$()/bankofdad.your-tailnet.ts.net
+
+// Your own bundle ID and Apple developer team ID (developer.apple.com > Membership details).
+// Needed for devices and TestFlight; see README "Install on family devices".
+BANKOFDAD_BUNDLE_ID = com.yourname.bankofdad
+DEVELOPMENT_TEAM = ABCDE12345
