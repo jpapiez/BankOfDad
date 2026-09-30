@@ -82,7 +82,7 @@ Tailscale: Running
 URL: https://bankofdad.<tailnet>.ts.net
 ```
 
-Then [point the app at that URL](../README.md#4-point-the-app-at-the-server).
+Then [point the app at that URL](../README.md#3-point-the-app-at-the-server).
 
 ### Settings
 

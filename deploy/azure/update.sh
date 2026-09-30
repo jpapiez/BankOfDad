@@ -51,7 +51,7 @@ setting() {
 if [[ -n ${APNS_KEY_FILE:-} ]]; then
   cp "$APNS_KEY_FILE" "$bundle/AuthKey.p8"
 fi
-# Only needed while the GHCR image is private.
+# Only needed if BANKOFDAD_IMAGE points at a private registry image.
 if [[ -n ${GHCR_TOKEN:-} ]]; then
   printf '%s\n%s\n' "${GHCR_USER:?Set GHCR_USER with GHCR_TOKEN}" "$GHCR_TOKEN" > "$bundle/ghcr.env"
 fi
