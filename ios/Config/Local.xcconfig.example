@@ -1,0 +1,4 @@
+// Copy to Local.xcconfig (gitignored) to override settings on this machine. It is picked up on the next build.
+
+// Tailscale-hosted backend (see deploy/README.md). Every family device must be on the tailnet.
+API_BASE_URL = https:/$()/bankofdad.your-tailnet.ts.net

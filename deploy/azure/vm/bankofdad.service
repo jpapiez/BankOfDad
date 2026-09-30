@@ -1,0 +1,15 @@
+[Unit]
+Description=Bank of Dad compose stack
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+# Docker restarts the containers itself; this makes sure the whole stack is up after boot.
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/bankofdad
+ExecStart=/usr/bin/docker compose up -d --remove-orphans
+
+[Install]
+WantedBy=multi-user.target

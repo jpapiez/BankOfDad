@@ -69,6 +69,10 @@ For end-to-end UI tests the API can expose `/api/v1/testing/*` endpoints that ba
 
 When `APNS_KEY_ID` is empty the API only logs notifications. To send real pushes, put your APNs `.p8` key at `./secrets/AuthKey.p8` (mounted read-only into the container), and set `APNS_KEY_ID`, `APNS_TEAM_ID`, `APNS_BUNDLE_ID`, and `APNS_USE_SANDBOX` in `.env`.
 
+## Hosting at home (Tailscale)
+
+To run the backend on an always-on Linux box or Raspberry Pi, use [`deploy/`](deploy/README.md). Family iPhones reach it at `https://bankofdad.<tailnet>.ts.net` over Tailscale, at home or away, with a trusted certificate. It runs the prebuilt multi-arch image from GHCR in Production mode and publishes nothing on the LAN. To run the same stack on a small Azure VM instead (about $13/month), see [`deploy/azure/`](deploy/azure/README.md).
+
 ## Running the iOS app
 
 Requires a Mac with Xcode 15+ and [XcodeGen](https://github.com/yonaskolb/XcodeGen):
@@ -101,6 +105,8 @@ Apple setup checklist:
 | **iOS build & test** | On `macos-15`: `xcodegen generate`, then `xcodebuild test` of the `BankOfDad` scheme on the newest available iPhone simulator, with code signing disabled. The end-to-end `BankOfDadUITests` are skipped because they need the Docker backend; run them locally with `ios/scripts/run-ui-tests.sh`. |
 
 To make these required for merging, add the three job names above as required status checks in the branch protection rule (or ruleset) for `main`.
+
+[`.github/workflows/publish-image.yml`](.github/workflows/publish-image.yml) builds the API image for `linux/amd64` and `linux/arm64` on pull requests that touch `backend/`. On merges to `main` it also pushes the image to `ghcr.io/jpapiez/bankofdad-api` (`latest` and `sha-<short sha>`) for [home hosting](deploy/README.md).
 ## Key rules
 
 - Money is stored as `numeric(18,2)` (rates and percentages as `numeric(9,6)` fractions) and rounded half-away-from-zero to cents. Loan schedules use standard amortization; the last installment absorbs rounding. For example, $300 at 5% APR over 6 monthly payments gives $50.73 per installment, $4.39 total interest, and $304.39 total repayable.

@@ -7,10 +7,13 @@ settings:
   base:
     SWIFT_VERSION: "5.0"
     IPHONEOS_DEPLOYMENT_TARGET: "17.0"
-    API_BASE_URL: "http://localhost:8080"
   configs:
     Debug:
       SWIFT_ACTIVE_COMPILATION_CONDITIONS: "DEBUG"
+# API_BASE_URL lives in Config/App.xcconfig (override per machine in Config/Local.xcconfig).
+configFiles:
+  Debug: Config/App.xcconfig
+  Release: Config/App.xcconfig
 targets:
   BankOfDad:
     type: application

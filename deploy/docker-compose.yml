@@ -1,0 +1,76 @@
+# Production stack for an always-on Linux box or Raspberry Pi (linux/amd64 or linux/arm64).
+# Family devices reach the API over Tailscale at https://<TS_HOSTNAME>.<tailnet>.ts.net.
+# Nothing is published on the LAN; see deploy/README.md.
+name: bankofdad
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-bankofdad}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in deploy/.env}
+      POSTGRES_DB: ${POSTGRES_DB:-bankofdad}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-bankofdad} -d ${POSTGRES_DB:-bankofdad}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Owns the network namespace that tailscale and api share (like a Kubernetes pod's pause container).
+  # Neither of them owns it, so either can crash and restart without leaving the other on a dead network.
+  netns:
+    image: registry.k8s.io/pause:3.10
+    hostname: ${TS_HOSTNAME:-bankofdad}
+    restart: unless-stopped
+    # Loopback only, for health checks on the box itself.
+    ports:
+      - "127.0.0.1:${API_LOCAL_PORT:-8080}:8080"
+
+  # Joins the tailnet as TS_HOSTNAME and serves HTTPS (auto-provisioned *.ts.net certificate) to the API.
+  tailscale:
+    image: tailscale/tailscale:stable
+    restart: unless-stopped
+    network_mode: service:netns
+    depends_on:
+      netns:
+        condition: service_started
+    environment:
+      TS_AUTHKEY: ${TS_AUTHKEY:-}
+      TS_AUTH_ONCE: "true"
+      TS_HOSTNAME: ${TS_HOSTNAME:-bankofdad}
+      TS_EXTRA_ARGS: ${TS_EXTRA_ARGS:-}
+      TS_STATE_DIR: /var/lib/tailscale
+      TS_SERVE_CONFIG: /config/serve.json
+    volumes:
+      - tailscale-state:/var/lib/tailscale
+      - ./tailscale/serve.json:/config/serve.json:ro
+
+  api:
+    image: ${BANKOFDAD_IMAGE:-ghcr.io/jpapiez/bankofdad-api:latest}
+    restart: unless-stopped
+    network_mode: service:netns
+    depends_on:
+      netns:
+        condition: service_started
+      db:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_HTTP_PORTS: "8080"
+      ConnectionStrings__Default: "Host=db;Port=5432;Database=${POSTGRES_DB:-bankofdad};Username=${POSTGRES_USER:-bankofdad};Password=${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in deploy/.env}"
+      Jwt__SigningKey: ${JWT_SIGNING_KEY:?Set JWT_SIGNING_KEY (32+ chars) in deploy/.env}
+      Apple__ClientId: ${APPLE_CLIENT_ID:-com.example.bankofdad}
+      Apns__KeyId: ${APNS_KEY_ID:-}
+      Apns__TeamId: ${APNS_TEAM_ID:-}
+      Apns__BundleId: ${APNS_BUNDLE_ID:-com.example.bankofdad}
+      Apns__UseSandbox: ${APNS_USE_SANDBOX:-true}
+      Apns__KeyPath: /run/secrets/apns/AuthKey.p8
+    volumes:
+      - ./secrets:/run/secrets/apns:ro
+
+volumes:
+  pgdata:
+  tailscale-state:

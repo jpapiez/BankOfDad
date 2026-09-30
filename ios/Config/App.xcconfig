@@ -1,0 +1,9 @@
+// Shared build settings for all configurations.
+// `//` starts a comment in xcconfig files, so URLs are written as `https:/$()/host`.
+
+// Backend the app talks to. The simulator reaches the local Docker stack on localhost.
+// To point a build at another server (e.g. the Tailscale-hosted backend), copy
+// Local.xcconfig.example to Local.xcconfig (gitignored) and set API_BASE_URL there.
+API_BASE_URL = http:/$()/localhost:8080
+
+#include? "Local.xcconfig"
