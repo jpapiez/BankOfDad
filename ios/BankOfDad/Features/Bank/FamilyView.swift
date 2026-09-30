@@ -46,6 +46,7 @@ struct FamilyView: View {
     @State private var addingChild = false
     @State private var inviteEmail = ""
     @State private var selectedChild: ChildDto?
+    @State private var editingChild: ChildDto?
 
     var body: some View {
         List {
@@ -79,6 +80,10 @@ struct FamilyView: View {
                             .accessibilityLabel("Loans and bills for \(child.displayName)")
                             .accessibilityIdentifier("family.child.\(child.displayName).open")
                     }
+                    .swipeActions(edge: .leading) {
+                        Button("Edit") { editingChild = child }.tint(.blue)
+                            .accessibilityIdentifier("family.child.\(child.displayName).edit")
+                    }
                 }
                 Button { addingChild = true } label: { Label("Add child", systemImage: "plus") }
                     .accessibilityIdentifier("family.addChild")
@@ -108,7 +113,14 @@ struct FamilyView: View {
         .toolbar { Button { addingChild = true } label: { Label("Add child", systemImage: "person.badge.plus") }.accessibilityIdentifier("family.addChildToolbar") }
         .sheet(isPresented: $addingChild) { AddChildSheet { name, color in await viewModel.addChild(name: name, color: color, service: environment.familyService) } }
         .sheet(item: $viewModel.pairing) { response in PairingCodeSheet(response: response) }
+        .sheet(item: $editingChild) { child in
+            EditChildSheet(child: child) { _ in Task { await viewModel.load(service: environment.familyService) } }
+        }
         .navigationDestination(item: $selectedChild) { child in ChildDetailView(child: child) }
+        // The child may have been edited in detail; reload when coming back to the list.
+        .onChange(of: selectedChild) { _, child in
+            if child == nil { Task { await viewModel.load(service: environment.familyService) } }
+        }
         .task { await viewModel.load(service: environment.familyService) }
         .refreshable { await viewModel.load(service: environment.familyService) }
     }
@@ -118,25 +130,24 @@ struct AddChildSheet: View {
     let onAdd: @MainActor (String, String) async -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var name = ""
-    @State private var color = "#4F8EF7"
-    private let colors = ["#4F8EF7", "#FF9F1C", "#2EC4B6", "#E71D36", "#7B61FF"]
+    @State private var color: String? = AvatarPalette.defaultHex
+
+    private var trimmedName: String { name.trimmingCharacters(in: .whitespacesAndNewlines) }
 
     var body: some View {
         NavigationStack {
             Form {
-                TextField("Child name", text: $name)
-                    .accessibilityIdentifier("addChild.name")
-                Picker("Avatar color", selection: $color) {
-                    ForEach(colors, id: \.self) { hex in
-                        HStack { Circle().fill(Color(hex: hex) ?? .blue).frame(width: 18, height: 18); Text(hex) }.tag(hex)
-                    }
+                Section("Name") {
+                    TextField("Child name", text: $name)
+                        .textInputAutocapitalization(.words)
+                        .accessibilityIdentifier("addChild.name")
                 }
-                .accessibilityIdentifier("addChild.color")
+                AvatarColorPicker(name: trimmedName, selection: $color)
             }
             .navigationTitle("Add child")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() }.accessibilityIdentifier("addChild.cancel") }
-                ToolbarItem(placement: .confirmationAction) { Button("Add") { Task { await onAdd(name, color); dismiss() } }.disabled(name.isEmpty).accessibilityIdentifier("addChild.add") }
+                ToolbarItem(placement: .confirmationAction) { Button("Add") { Task { await onAdd(trimmedName, color ?? AvatarPalette.defaultHex); dismiss() } }.disabled(trimmedName.isEmpty).accessibilityIdentifier("addChild.add") }
             }
         }
     }

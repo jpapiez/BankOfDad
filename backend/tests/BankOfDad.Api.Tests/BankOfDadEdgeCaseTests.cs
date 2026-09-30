@@ -219,6 +219,36 @@ public sealed class BankOfDadEdgeCaseTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Children_NameAndAvatarColor_AreValidatedOnCreateAndUpdate()
+    {
+        ResetClock();
+        var family = await CreateFamily("child-validation", childCount: 1);
+        var childUrl = $"/api/v1/family/children/{family.Children[0].Id}";
+        Use(family.Parent.AccessToken);
+
+        await AssertProblem(await _client.PostAsJsonAsync("/api/v1/family/children", new ChildRequest("   ", null), Json), HttpStatusCode.BadRequest);
+        await AssertProblem(await _client.PostAsJsonAsync("/api/v1/family/children", new ChildRequest(new string('x', 101), null), Json), HttpStatusCode.BadRequest);
+        foreach (var invalid in new[] { "", "blue", "4F8EF7", "#4F8EF", "#GGGGGG", "#4F8EF7FF", new string('#', 21) })
+        {
+            await AssertProblem(await _client.PostAsJsonAsync("/api/v1/family/children", new ChildRequest("Kid", invalid), Json), HttpStatusCode.BadRequest);
+            await AssertProblem(await _client.PatchAsJsonAsync(childUrl, new ChildPatchRequest(null, invalid), Json), HttpStatusCode.BadRequest);
+        }
+
+        await AssertProblem(await _client.PatchAsJsonAsync(childUrl, new ChildPatchRequest("  ", null), Json), HttpStatusCode.BadRequest);
+        await AssertProblem(await _client.PatchAsJsonAsync(childUrl, new ChildPatchRequest(new string('x', 101), null), Json), HttpStatusCode.BadRequest);
+        (await Get<FamilyDto>("/api/v1/family")).Children.Single().Should().BeEquivalentTo(family.Children[0], "rejected updates change nothing");
+
+        var renamed = await Patch<ChildDto>(childUrl, new ChildPatchRequest("  Samantha  ", " #7b61ff "));
+        renamed.DisplayName.Should().Be("Samantha");
+        renamed.AvatarColor.Should().Be("#7B61FF");
+
+        var colorOnly = await Patch<ChildDto>(childUrl, new ChildPatchRequest(null, "#2EC4B6"));
+        colorOnly.DisplayName.Should().Be("Samantha", "omitted fields are unchanged");
+        colorOnly.AvatarColor.Should().Be("#2EC4B6");
+        (await Get<FamilyDto>("/api/v1/family")).Children.Single().Should().BeEquivalentTo(colorOnly);
+    }
+
+    [Fact]
     public async Task FractionalRates_CreateAndGet_ReturnExactPersistedValues()
     {
         ResetClock();
@@ -300,6 +330,14 @@ public sealed class BankOfDadEdgeCaseTests : IAsyncLifetime
         var errorBody = await response.Content.ReadAsStringAsync();
         var authHeader = string.Join(" | ", response.Headers.WwwAuthenticate.Select(x => x.ToString()));
         response.StatusCode.Should().Be(expected, $"{errorBody} {authHeader}");
+        return (await response.Content.ReadFromJsonAsync<T>(Json))!;
+    }
+
+    private async Task<T> Patch<T>(string url, object body)
+    {
+        var response = await _client.PatchAsJsonAsync(url, body, Json);
+        var errorBody = await response.Content.ReadAsStringAsync();
+        response.StatusCode.Should().Be(HttpStatusCode.OK, errorBody);
         return (await response.Content.ReadFromJsonAsync<T>(Json))!;
     }
 

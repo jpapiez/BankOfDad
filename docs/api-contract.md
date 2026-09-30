@@ -139,9 +139,11 @@ Password rules: min 8 chars. Emails unique, case-insensitive.
 | PATCH | `/api/v1/family` | `{ name?, timeZone? }` | `FamilyDto` |
 | POST | `/api/v1/family/invites` | `{ email? }` | 201 `{ inviteCode, expiresAt }` (co-parent invite, 7 days, single use) |
 | POST | `/api/v1/family/children` | `{ displayName, avatarColor? }` | 201 `ChildDto` |
-| PATCH | `/api/v1/family/children/{childId}` | `{ displayName?, avatarColor? }` | `ChildDto` |
+| PATCH | `/api/v1/family/children/{childId}` | `{ displayName?, avatarColor? }` | `ChildDto` (omitted fields are unchanged) |
 | POST | `/api/v1/family/children/{childId}/pairing-code` | — | 201 `{ code: "K7Q-4MZ-2P", qrPayload: "bankofdad://pair?code=K7Q4MZ2P", expiresAt }` (15 min, single use, 8 chars from an unambiguous alphabet; dashes/case ignored on input) |
 | DELETE | `/api/v1/family/children/{childId}/devices` | — | 204 (revokes all the child's refresh tokens) |
+
+Child `displayName` is trimmed and must be 1–100 characters; `avatarColor` must be a `#RRGGBB` hex color (stored uppercase). Otherwise 400.
 
 ### Loans — parent
 | Method | Route | Body | Response |

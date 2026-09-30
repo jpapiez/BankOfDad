@@ -1,3 +1,4 @@
+import SwiftUI
 import XCTest
 @testable import BankOfDad
 
@@ -20,5 +21,21 @@ final class UtilityTests: XCTestCase {
         let formatted = AppFormatters.money(Decimal(string: "12.34")!, currencyCode: "USD")
         XCTAssertFalse(formatted.isEmpty)
         XCTAssertTrue(formatted.contains("12"))
+    }
+
+    func testAvatarPaletteMatchesStoredHexCaseInsensitively() {
+        XCTAssertEqual(AvatarPalette.option(for: "#ff9f1c")?.name, "Orange")
+        XCTAssertEqual(AvatarPalette.option(for: AvatarPalette.defaultHex)?.name, "Blue")
+        XCTAssertNil(AvatarPalette.option(for: "#123456"), "Custom colors have no swatch")
+        XCTAssertNil(AvatarPalette.option(for: nil))
+        XCTAssertEqual(Set(AvatarPalette.options.map(\.hex)).count, AvatarPalette.options.count)
+        XCTAssertTrue(AvatarPalette.options.allSatisfy { $0.hex.range(of: "^#[0-9A-F]{6}$", options: .regularExpression) != nil }, "Hexes must pass the API's validation")
+    }
+
+    func testLightColorsGetDarkInitials() {
+        let dark = AvatarPalette.options.filter { Color.isLight(hex: $0.hex) }.map(\.name)
+        XCTAssertEqual(Set(dark), ["Orange", "Teal", "Yellow"])
+        XCTAssertFalse(Color.isLight(hex: nil))
+        XCTAssertFalse(Color.isLight(hex: "not a color"))
     }
 }

@@ -255,7 +255,7 @@ familyGroup.MapPost("/invites", async (InviteRequest request, ClaimsPrincipal us
 });
 familyGroup.MapPost("/children", async (ChildRequest request, ClaimsPrincipal user, BankOfDadDbContext db, IClock clock, CancellationToken ct) =>
 {
-    var child = new User { FamilyId = user.FamilyId(), Role = Role.Child, DisplayName = Required(request.DisplayName, "displayName"), AvatarColor = request.AvatarColor, CreatedAt = clock.UtcNow };
+    var child = new User { FamilyId = user.FamilyId(), Role = Role.Child, DisplayName = ValidChildName(request.DisplayName), AvatarColor = ValidAvatarColor(request.AvatarColor), CreatedAt = clock.UtcNow };
     db.Users.Add(child);
     await db.SaveChangesAsync(ct);
     return Results.Created($"/api/v1/family/children/{child.Id}", DtoMapper.Child(child));
@@ -263,8 +263,9 @@ familyGroup.MapPost("/children", async (ChildRequest request, ClaimsPrincipal us
 familyGroup.MapPatch("/children/{childId:guid}", async (Guid childId, ChildPatchRequest request, ClaimsPrincipal user, BankOfDadDbContext db, IClock clock, CancellationToken ct) =>
 {
     var child = await db.Users.SingleOrDefaultAsync(x => x.Id == childId && x.FamilyId == user.FamilyId() && x.Role == Role.Child, ct) ?? throw new ApiException(404, "Child not found.");
-    if (!string.IsNullOrWhiteSpace(request.DisplayName)) child.DisplayName = request.DisplayName;
-    if (request.AvatarColor is not null) child.AvatarColor = request.AvatarColor;
+    // Omitted fields are left unchanged; a blank name is rejected rather than ignored.
+    if (request.DisplayName is not null) child.DisplayName = ValidChildName(request.DisplayName);
+    if (request.AvatarColor is not null) child.AvatarColor = ValidAvatarColor(request.AvatarColor);
     await db.SaveChangesAsync(ct);
     return Results.Ok(DtoMapper.Child(child, await CountPairedDevices(db, child.Id, clock, ct)));
 });
@@ -479,6 +480,22 @@ static string Required(string? value, string name)
 {
     if (string.IsNullOrWhiteSpace(value)) throw new ApiException(400, $"{name} is required.");
     return value.Trim();
+}
+
+static string ValidChildName(string? value)
+{
+    var name = Required(value, "displayName");
+    if (name.Length > 100) throw new ApiException(400, "displayName must be 100 characters or fewer.");
+    return name;
+}
+
+// Avatar colors are stored as #RRGGBB (the column holds at most 20 characters).
+static string? ValidAvatarColor(string? value)
+{
+    if (value is null) return null;
+    var color = value.Trim();
+    if (!System.Text.RegularExpressions.Regex.IsMatch(color, "^#[0-9A-Fa-f]{6}$")) throw new ApiException(400, "avatarColor must be a hex color like #4F8EF7.");
+    return color.ToUpperInvariant();
 }
 
 // Minimal API enum binding is case-sensitive; the contract uses camelCase (e.g. status=paidOff).

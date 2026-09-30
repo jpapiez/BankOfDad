@@ -28,11 +28,14 @@ final class ChildDetailViewModel {
 /// One child's loans and recurring bills, with the total they owe now.
 @MainActor
 struct ChildDetailView: View {
-    let child: ChildDto
+    @State private var child: ChildDto
     @Environment(AppEnvironment.self) private var environment
     @State private var viewModel = ChildDetailViewModel()
     @State private var addingBill = false
     @State private var createdBill: BillDetail?
+    @State private var editingChild = false
+
+    init(child: ChildDto) { _child = State(initialValue: child) }
 
     var body: some View {
         List {
@@ -87,6 +90,8 @@ struct ChildDetailView: View {
         .sheet(isPresented: $addingBill, onDismiss: reload) {
             NewBillView(childId: child.id, childName: child.displayName) { bill in createdBill = bill }
         }
+        .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Edit") { editingChild = true }.accessibilityIdentifier("childDetail.edit") } }
+        .sheet(isPresented: $editingChild) { EditChildSheet(child: child) { child = $0 } }
         .task { await load() }
         .refreshable { await load() }
     }

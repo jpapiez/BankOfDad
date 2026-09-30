@@ -85,12 +85,13 @@ struct ProgressRing: View {
 struct AvatarView: View {
     let name: String
     let colorHex: String?
+    var size: CGFloat = 44
 
     var body: some View {
         Text(initials)
-            .font(.headline.weight(.bold))
-            .foregroundStyle(.white)
-            .frame(width: 44, height: 44)
+            .font(.system(size: size * 0.4, weight: .bold))
+            .foregroundStyle(Color.isLight(hex: colorHex) ? .black : .white)
+            .frame(width: size, height: size)
             .background(Color(hex: colorHex) ?? .blue, in: Circle())
             .accessibilityHidden(true)
     }
@@ -111,6 +112,20 @@ extension Color {
         let green = Double((value >> 8) & 0xff) / 255
         let blue = Double(value & 0xff) / 255
         self.init(red: red, green: green, blue: blue)
+    }
+
+    /// True for light colors (e.g. orange, teal, yellow), where dark text has far better contrast than white.
+    /// The cutoff keeps white on colors where it still meets 3:1 for bold text.
+    static func isLight(hex: String?) -> Bool {
+        guard let hex else { return false }
+        let trimmed = hex.trimmingCharacters(in: CharacterSet(charactersIn: "#"))
+        guard trimmed.count == 6, let value = UInt64(trimmed, radix: 16) else { return false }
+        func linear(_ channel: UInt64) -> Double {
+            let c = Double(channel & 0xff) / 255
+            return c <= 0.04045 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4)
+        }
+        let luminance = 0.2126 * linear(value >> 16) + 0.7152 * linear(value >> 8) + 0.0722 * linear(value)
+        return luminance > 0.4
     }
 }
 
