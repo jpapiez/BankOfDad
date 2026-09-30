@@ -9,6 +9,7 @@ final class AppEnvironment {
     let apiClient: APIClient
     let familyService: FamilyService
     let loanService: LoanService
+    let billService: BillService
     let notificationService: NotificationService
     let authSession: AuthSession
     let router: AppRouter
@@ -31,6 +32,7 @@ final class AppEnvironment {
         self.apiClient = apiClient
         self.familyService = FamilyService(api: apiClient)
         self.loanService = LoanService(api: apiClient)
+        self.billService = BillService(api: apiClient)
         self.notificationService = NotificationService(api: apiClient)
         self.authSession = AuthSession(apiClient: apiClient, keychain: keychain, vault: vault)
         self.pushManager = PushManager(notificationService: self.notificationService, router: self.router)

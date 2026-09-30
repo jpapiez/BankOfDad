@@ -39,6 +39,16 @@ struct DashboardView: View {
                                 .accessibilityIdentifier("dashboard.late")
                         }
                         .foregroundStyle(.secondary)
+                        if let activeBills = dashboard.activeBills, activeBills > 0 {
+                            HStack {
+                                Label("\(activeBills) bill\(activeBills == 1 ? "" : "s")", systemImage: "doc.text")
+                                    .accessibilityIdentifier("dashboard.bills")
+                                Spacer()
+                                Label("\(dashboard.lateBillCharges ?? 0) late", systemImage: "clock.badge.exclamationmark")
+                                    .accessibilityIdentifier("dashboard.lateBills")
+                            }
+                            .foregroundStyle(.secondary)
+                        }
                     }
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Coming up")
@@ -61,6 +71,28 @@ struct DashboardView: View {
                                 }
                                 .buttonStyle(.plain)
                                 .accessibilityIdentifier("dashboard.upcoming.\(item.loanId.uuidString)")
+                            }
+                        }
+                    }
+                    if let bills = dashboard.upcomingBills, !bills.isEmpty {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Bills coming up")
+                                .font(.title2.bold())
+                            ForEach(bills) { item in
+                                NavigationLink { BillDetailView(billId: item.billId, isKidMode: false) } label: {
+                                    Card {
+                                        HStack(alignment: .firstTextBaseline) {
+                                            VStack(alignment: .leading, spacing: 4) {
+                                                Text(item.billTitle).font(.headline)
+                                                Text("\(item.childName) • \(AppFormatters.date(item.dueDate))").foregroundStyle(.secondary)
+                                            }
+                                            Spacer()
+                                            MoneyText(value: item.amountDue, font: .headline)
+                                        }
+                                    }
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityIdentifier("dashboard.upcomingBill.\(item.billId.uuidString).\(item.dueDate)")
                             }
                         }
                     }

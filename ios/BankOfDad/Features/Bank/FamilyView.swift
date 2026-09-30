@@ -45,6 +45,7 @@ struct FamilyView: View {
     @State private var viewModel = FamilyViewModel()
     @State private var addingChild = false
     @State private var inviteEmail = ""
+    @State private var selectedChild: ChildDto?
 
     var body: some View {
         List {
@@ -52,15 +53,19 @@ struct FamilyView: View {
             Section("Children") {
                 ForEach(viewModel.family?.children ?? []) { child in
                     HStack {
-                        AvatarView(name: child.displayName, colorHex: child.avatarColor)
-                        VStack(alignment: .leading) {
-                            Text(child.displayName).font(.headline)
-                            Text("\(child.pairedDeviceCount) paired device\(child.pairedDeviceCount == 1 ? "" : "s")")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .accessibilityIdentifier("family.child.\(child.displayName).devices")
+                        HStack {
+                            AvatarView(name: child.displayName, colorHex: child.avatarColor)
+                            VStack(alignment: .leading) {
+                                Text(child.displayName).font(.headline)
+                                Text("\(child.pairedDeviceCount) paired device\(child.pairedDeviceCount == 1 ? "" : "s")")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .accessibilityIdentifier("family.child.\(child.displayName).devices")
+                            }
+                            Spacer()
                         }
-                        Spacer()
+                        .contentShape(Rectangle())
+                        .onTapGesture { selectedChild = child }
                         Menu {
                             Button("Generate pairing code") { Task { await viewModel.generatePairing(childId: child.id, service: environment.familyService) } }
                                 .accessibilityIdentifier("family.generatePairing")
@@ -69,6 +74,10 @@ struct FamilyView: View {
                         } label: { Image(systemName: "ellipsis.circle").frame(width: 44, height: 44) }
                         .accessibilityLabel("Actions for \(child.displayName)")
                         .accessibilityIdentifier("family.child.\(child.displayName).actions")
+                        Button { selectedChild = child } label: { Image(systemName: "chevron.right").foregroundStyle(.secondary).frame(width: 32, height: 44) }
+                            .buttonStyle(.borderless)
+                            .accessibilityLabel("Loans and bills for \(child.displayName)")
+                            .accessibilityIdentifier("family.child.\(child.displayName).open")
                     }
                 }
                 Button { addingChild = true } label: { Label("Add child", systemImage: "plus") }
@@ -99,6 +108,7 @@ struct FamilyView: View {
         .toolbar { Button { addingChild = true } label: { Label("Add child", systemImage: "person.badge.plus") }.accessibilityIdentifier("family.addChildToolbar") }
         .sheet(isPresented: $addingChild) { AddChildSheet { name, color in await viewModel.addChild(name: name, color: color, service: environment.familyService) } }
         .sheet(item: $viewModel.pairing) { response in PairingCodeSheet(response: response) }
+        .navigationDestination(item: $selectedChild) { child in ChildDetailView(child: child) }
         .task { await viewModel.load(service: environment.familyService) }
         .refreshable { await viewModel.load(service: environment.familyService) }
     }

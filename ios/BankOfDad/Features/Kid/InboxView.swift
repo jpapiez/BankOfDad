@@ -52,6 +52,9 @@ struct InboxView: View {
         if let loanId = notification.loanId {
             NavigationLink { KidLoanDetailView(loanId: loanId) } label: { rowContent(notification) }
                 .task { await viewModel.markRead(notification, service: environment.notificationService) }
+        } else if let billId = notification.billId {
+            NavigationLink { BillDetailView(billId: billId, isKidMode: true) } label: { rowContent(notification) }
+                .task { await viewModel.markRead(notification, service: environment.notificationService) }
         } else {
             rowContent(notification)
                 .task { await viewModel.markRead(notification, service: environment.notificationService) }
@@ -82,6 +85,7 @@ struct InboxView: View {
         case .receipt: return "checkmark.seal.fill"
         case .loanCreated: return "sparkles"
         case .lateFee: return "exclamationmark.triangle.fill"
+        case .billCreated: return "doc.text.fill"
         case .unknown: return "bell.fill"
         }
     }
