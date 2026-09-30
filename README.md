@@ -106,10 +106,15 @@ Apple setup checklist:
 
 To make these required for merging, add the three job names above as required status checks in the branch protection rule (or ruleset) for `main`.
 
-[`.github/workflows/publish-image.yml`](.github/workflows/publish-image.yml) builds the API image for `linux/amd64` and `linux/arm64` on pull requests that touch `backend/`. On merges to `main` it also pushes the image to `ghcr.io/jpapiez/bankofdad-api` (`latest` and `sha-<short sha>`) for [home hosting](deploy/README.md).
+[`.github/workflows/publish-image.yml`](.github/workflows/publish-image.yml) builds the API image for `linux/amd64` and `linux/arm64` on pull requests that touch `backend/`. On merges to `main` it also pushes the image to `ghcr.io/jpapiez/bankofdad-api` (`latest` and `sha-<short sha>`) for [home hosting](deploy/README.md). The image is public, so `docker pull` needs no login.
+
 ## Key rules
 
 - Money is stored as `numeric(18,2)` (rates and percentages as `numeric(9,6)` fractions) and rounded half-away-from-zero to cents. Loan schedules use standard amortization; the last installment absorbs rounding. For example, $300 at 5% APR over 6 monthly payments gives $50.73 per installment, $4.39 total interest, and $304.39 total repayable.
 - Payments go to outstanding late fees first (oldest first), then to each installment in order, interest before principal.
 - Late fees (flat and/or percent of the missed installment) are charged once per installment after the grace period.
 - Kids see only their own loans. Parents in the same family share a single bank.
+
+## License
+
+[MIT](LICENSE)

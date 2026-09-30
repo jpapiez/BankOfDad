@@ -21,7 +21,7 @@ flowchart LR
 
 - **Only reachable over the tailnet.** Nothing is published on the LAN. The API is also on `127.0.0.1:8080` on the box, for health checks.
 - **Trusted HTTPS.** Tailscale provisions a real certificate for the node's `*.ts.net` name, so the app needs no App Transport Security exceptions.
-- **Prebuilt image.** The API image (`linux/amd64` + `linux/arm64`) is built by [`.github/workflows/publish-image.yml`](../.github/workflows/publish-image.yml) and pushed to `ghcr.io/jpapiez/bankofdad-api` on every merge to `main`. Tags are `latest` and `sha-<short sha>`.
+- **Prebuilt image.** The API image (`linux/amd64` + `linux/arm64`) is built by [`.github/workflows/publish-image.yml`](../.github/workflows/publish-image.yml) and pushed to `ghcr.io/jpapiez/bankofdad-api` on every merge to `main`. Tags are `latest` and `sha-<short sha>`. The image is public, so no registry login is needed.
 
 ## Requirements
 
@@ -37,15 +37,7 @@ In the [Tailscale admin console](https://login.tailscale.com/admin):
    - **Recommended:** tag the node. Add `"tagOwners": {"tag:bankofdad": ["autogroup:admin"]}` to your access-control policy, generate the key with the `tag:bankofdad` tag, and set `TS_EXTRA_ARGS=--advertise-tags=tag:bankofdad`. Tagged nodes don't expire.
    - **Without a tag:** after the node joins, open **Machines → bankofdad → Disable key expiry**. Otherwise it drops off the tailnet when its key expires (180 days by default).
 
-## 2. Let the server pull the private image (once)
-
-The repository is private, so its GHCR package is too. Create a **classic** personal access token with only the `read:packages` scope, then on the server run:
-
-```sh
-echo '<token>' | docker login ghcr.io -u jpapiez --password-stdin
-```
-
-## 3. Install and start
+## 2. Install and start
 
 The server only needs this `deploy/` folder. Copy it over, e.g. `scp -r deploy user@server:~/bankofdad`, or clone the repository. Then:
 
@@ -63,7 +55,7 @@ From any device on the tailnet: `curl https://bankofdad.<tailnet>.ts.net/health`
 
 The compose file refuses to start without `POSTGRES_PASSWORD` and `JWT_SIGNING_KEY`. The API runs in **Production**: it requires a 32+ character signing key, hides exception details and OpenAPI, and can't enable the Development-only test hooks. Database migrations are applied automatically at startup.
 
-## 4. Point the app at the server
+## 3. Point the app at the server
 
 On the Mac that builds the app:
 
