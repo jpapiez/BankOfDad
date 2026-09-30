@@ -103,7 +103,7 @@ Then [point the app at that URL](../README.md#4-point-the-app-at-the-server).
 | `BANKOFDAD_IMAGE` | `ghcr.io/jpapiez/bankofdad-api:latest` | Pin `:sha-<short sha>` to hold a version. |
 | `APPLE_CLIENT_ID`, `APNS_KEY_ID`, `APNS_TEAM_ID`, `APNS_BUNDLE_ID`, `APNS_USE_SANDBOX` | as in [`.env.example`](../.env.example) | Sign in with Apple and push notifications. |
 | `APNS_KEY_FILE` | | Local path to your APNs `AuthKey.p8`. It's copied to the VM. |
-| `GHCR_USER`, `GHCR_TOKEN` | | Only needed while the GHCR image is private (a token with `read:packages`). |
+| `GHCR_USER`, `GHCR_TOKEN` | | Only needed if `BANKOFDAD_IMAGE` points at a private registry image (a token with `read:packages`). The default image is public. |
 
 `update.sh` rewrites the settings on every run, so always run it with your full set of variables. The exceptions are `TS_AUTHKEY`, which is only needed once, and `APNS_KEY_FILE`: the key already on the VM is kept.
 
