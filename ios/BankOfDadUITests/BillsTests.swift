@@ -16,6 +16,8 @@ final class BillsTests: BankUITestCase {
         element("childDetail.noBills").waitToAppear()
         element("childDetail.addBill").tap()
         XCTAssertTrue(app.navigationBars["New bill"].waitForExistence(timeout: 10))
+        XCTAssertFalse(element("newBill.childPicker").exists, "The child is preselected from Child detail")
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS[c] %@", "Mia pays")).firstMatch.exists)
         XCTAssertFalse(button("newBill.create").isEnabled, "Create needs a name and an amount")
         element("newBill.title").replaceText("Cell phone")
         element("newBill.amount").replaceText("45")

@@ -10,7 +10,7 @@ final class LateFeeTests: BankUITestCase {
     }
 
     private func openLoan(_ loan: LoanDetail) {
-        openTab("Loans")
+        openTab("Owed")
         element("loanRow.\(loan.id.uiID)").waitToAppear().tap()
         element("loanDetail.balance").waitToAppear()
     }
@@ -26,7 +26,7 @@ final class LateFeeTests: BankUITestCase {
         element("dashboard.late").waitFor(label: "1 late")
         element("dashboard.outstanding").waitFor(label: Fmt.money(305))
 
-        openTab("Loans")
+        openTab("Owed")
         element("loanRow.\(loan.id.uiID)").waitToAppear().tap()
         element("loanDetail.late").waitFor(label: "1 late")
         element("loanDetail.balance").waitFor(label: Fmt.money(305))

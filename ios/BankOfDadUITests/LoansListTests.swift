@@ -14,28 +14,28 @@ final class LoansListTests: BankUITestCase {
         try api.cancelLoan(parent, loanId: cancelled.id)
 
         launch(as: parent)
-        openTab("Loans")
+        openTab("Owed")
 
         row(active).waitToAppear()
         XCTAssertFalse(row(paid).exists)
         XCTAssertFalse(row(cancelled).exists)
         assertNoErrorBanner()
 
-        choose("Paid off", in: element("loans.statusPicker"))
+        choose("Paid off loans", in: element("owed.statusPicker"))
         row(paid).waitToAppear()
         row(paid).waitFor(label: "Paid off")
         XCTAssertFalse(row(active).exists)
         XCTAssertFalse(row(cancelled).exists)
         assertNoErrorBanner()
 
-        choose("Cancelled", in: element("loans.statusPicker"))
+        choose("Cancelled loans", in: element("owed.statusPicker"))
         row(cancelled).waitToAppear()
         row(cancelled).waitFor(label: "Cancelled")
         XCTAssertFalse(row(active).exists)
         XCTAssertFalse(row(paid).exists)
         assertNoErrorBanner()
 
-        choose("Active", in: element("loans.statusPicker"))
+        choose("Active", in: element("owed.statusPicker"))
         row(active).waitToAppear()
         XCTAssertFalse(row(cancelled).exists)
         assertNoErrorBanner()
@@ -49,16 +49,16 @@ final class LoansListTests: BankUITestCase {
         let finnLoan = try api.createLoan(parent, childId: finn.id, .init(title: "Finn's lego"))
 
         launch(as: parent)
-        openTab("Loans")
+        openTab("Owed")
         row(eveLoan).waitToAppear()
         row(finnLoan).waitToAppear()
 
-        choose("Finn", in: element("loans.childPicker"))
+        choose("Finn", in: element("owed.childPicker"))
         row(finnLoan).waitToAppear()
         row(eveLoan).waitToDisappear()
         assertNoErrorBanner()
 
-        choose("All children", in: element("loans.childPicker"))
+        choose("All children", in: element("owed.childPicker"))
         row(eveLoan).waitToAppear()
         row(finnLoan).waitToAppear()
     }
@@ -70,7 +70,7 @@ final class LoansListTests: BankUITestCase {
         try api.recordPayment(parent, loanId: loan.id, amount: 25)
 
         launch(as: parent)
-        openTab("Loans")
+        openTab("Owed")
         let label = row(loan).waitToAppear().label
         for fragment in ["Headphones", "Gus", "Next: \(Fmt.money(75)) on \(Fmt.date(day: loan.firstDueDate))", Fmt.money(275), "Active"] {
             XCTAssertTrue(label.contains(fragment), "Row label '\(label)' is missing '\(fragment)'")
@@ -80,10 +80,10 @@ final class LoansListTests: BankUITestCase {
     func testEmptyState() throws {
         let parent = try api.registerParent()
         launch(as: parent)
-        openTab("Loans")
-        XCTAssertTrue(text("No loans found").waitForExistence(timeout: 10))
-        choose("Cancelled", in: element("loans.statusPicker"))
-        XCTAssertTrue(text("No loans found").waitForExistence(timeout: 10))
+        openTab("Owed")
+        XCTAssertTrue(text("Nothing owed").waitForExistence(timeout: 10))
+        choose("Cancelled loans", in: element("owed.statusPicker"))
+        XCTAssertTrue(text("Nothing found").waitForExistence(timeout: 10))
         assertNoErrorBanner()
     }
 
@@ -93,7 +93,7 @@ final class LoansListTests: BankUITestCase {
         let loan = try api.createLoan(parent, childId: child.id, .init(title: "Camera", principal: 150))
 
         launch(as: parent)
-        openTab("Loans")
+        openTab("Owed")
         row(loan).waitToAppear().tap()
         XCTAssertTrue(app.navigationBars["Camera"].waitForExistence(timeout: 10))
         element("loanDetail.balance").waitFor(label: Fmt.money(150))

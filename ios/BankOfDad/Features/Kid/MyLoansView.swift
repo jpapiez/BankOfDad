@@ -9,6 +9,11 @@ final class MyLoansViewModel {
     var isLoading = false
     var error: String?
 
+    /// Everything left on active loans plus what's due now on bills. Cancelled loans are forgiven, so they don't count.
+    var totalOwed: Decimal {
+        loans.filter { $0.status == .active }.reduce(0) { $0 + $1.balance } + bills.reduce(0) { $0 + $1.balance }
+    }
+
     func load(service: LoanService, billService: BillService) async {
         isLoading = true; defer { isLoading = false }
         do {
@@ -24,6 +29,7 @@ final class MyLoansViewModel {
     }
 }
 
+/// The kid's "What I Owe" tab: their loans and bills together, read-only, with the total owed.
 @MainActor
 struct MyLoansView: View {
     @Environment(AppEnvironment.self) private var environment
@@ -34,13 +40,15 @@ struct MyLoansView: View {
             VStack(spacing: 16) {
                 if let error = viewModel.error { ErrorBanner(message: error) }
                 if viewModel.loans.isEmpty && viewModel.bills.isEmpty && !viewModel.isLoading {
-                    EmptyStateView(systemImage: "party.popper", title: "No loans right now", message: "When the Bank adds a loan, it will show up here.")
+                    EmptyStateView(systemImage: "party.popper", title: "Nothing owed right now", message: "When the Bank adds a loan or a bill, it will show up here.")
                         .padding(.top, 80)
                 } else {
+                    KidTotalOwedCard(total: viewModel.totalOwed)
                     if !viewModel.bills.isEmpty {
                         Text("My bills")
                             .font(.title2.bold())
                             .frame(maxWidth: .infinity, alignment: .leading)
+                            .accessibilityAddTraits(.isHeader)
                             .accessibilityIdentifier("kidBills.header")
                         ForEach(viewModel.bills) { bill in
                             NavigationLink { BillDetailView(billId: bill.id, isKidMode: true) } label: {
@@ -53,6 +61,8 @@ struct MyLoansView: View {
                             Text("My loans")
                                 .font(.title2.bold())
                                 .frame(maxWidth: .infinity, alignment: .leading)
+                                .accessibilityAddTraits(.isHeader)
+                                .accessibilityIdentifier("kidLoans.header")
                         }
                     }
                     ForEach(viewModel.loans) { loan in
@@ -67,9 +77,26 @@ struct MyLoansView: View {
             .padding()
         }
         .background(Color(.systemGroupedBackground))
-        .navigationTitle("My loans")
+        .navigationTitle("What I owe")
         .task { await viewModel.load(service: environment.loanService, billService: environment.billService) }
         .refreshable { await viewModel.load(service: environment.loanService, billService: environment.billService) }
+    }
+}
+
+struct KidTotalOwedCard: View {
+    let total: Decimal
+
+    var body: some View {
+        Card {
+            HStack {
+                Text("Total I owe").font(.headline)
+                Spacer()
+                MoneyText(value: total, font: .title2.bold())
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Total I owe, \(AppFormatters.money(total))")
+        .accessibilityIdentifier("kidOwed.total")
     }
 }
 
