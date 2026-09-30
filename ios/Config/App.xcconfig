@@ -6,4 +6,11 @@
 // Local.xcconfig.example to Local.xcconfig (gitignored) and set API_BASE_URL there.
 API_BASE_URL = http:/$()/localhost:8080
 
+// Bundle ID and signing team. The placeholder works for the simulator; set your own
+// in Local.xcconfig to run on a device or upload to TestFlight. The backend's
+// APPLE_CLIENT_ID and APNS_BUNDLE_ID must match BANKOFDAD_BUNDLE_ID.
+BANKOFDAD_BUNDLE_ID = com.example.bankofdad
+DEVELOPMENT_TEAM =
+CODE_SIGN_STYLE = Automatic
+
 #include? "Local.xcconfig"

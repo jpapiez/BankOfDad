@@ -10,7 +10,7 @@ settings:
   configs:
     Debug:
       SWIFT_ACTIVE_COMPILATION_CONDITIONS: "DEBUG"
-# API_BASE_URL lives in Config/App.xcconfig (override per machine in Config/Local.xcconfig).
+# API_BASE_URL, the bundle ID and the signing team live in Config/App.xcconfig (override per machine in Config/Local.xcconfig).
 configFiles:
   Debug: Config/App.xcconfig
   Release: Config/App.xcconfig
@@ -25,11 +25,13 @@ targets:
       - path: BankOfDad/Resources/Assets.xcassets
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.example.bankofdad
+        PRODUCT_BUNDLE_IDENTIFIER: $(BANKOFDAD_BUNDLE_ID)
         INFOPLIST_FILE: BankOfDad/Resources/Info.plist
         CODE_SIGN_ENTITLEMENTS: BankOfDad/Resources/BankOfDad.entitlements
         CURRENT_PROJECT_VERSION: 1
         MARKETING_VERSION: 1.0
+        # iPhone only; iPads run it in iPhone compatibility mode.
+        TARGETED_DEVICE_FAMILY: "1"
     scheme:
       testTargets:
         - BankOfDadTests
@@ -40,6 +42,10 @@ targets:
       path: BankOfDad/Resources/Info.plist
       properties:
         CFBundleDisplayName: Bank of Dad
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        # Only standard HTTPS is used, so no export-compliance documentation is needed.
+        ITSAppUsesNonExemptEncryption: false
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
@@ -53,7 +59,7 @@ targets:
             127.0.0.1:
               NSExceptionAllowsInsecureHTTPLoads: true
         CFBundleURLTypes:
-          - CFBundleURLName: com.example.bankofdad.pairing
+          - CFBundleURLName: $(PRODUCT_BUNDLE_IDENTIFIER).pairing
             CFBundleURLSchemes:
               - bankofdad
         UIBackgroundModes:
@@ -67,7 +73,7 @@ targets:
       - target: BankOfDad
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.example.bankofdad.tests
+        PRODUCT_BUNDLE_IDENTIFIER: $(BANKOFDAD_BUNDLE_ID).tests
         GENERATE_INFOPLIST_FILE: YES
   BankOfDadUITests:
     type: bundle.ui-testing
@@ -78,6 +84,6 @@ targets:
       - target: BankOfDad
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.example.bankofdad.uitests
+        PRODUCT_BUNDLE_IDENTIFIER: $(BANKOFDAD_BUNDLE_ID).uitests
         GENERATE_INFOPLIST_FILE: YES
         TEST_TARGET_NAME: BankOfDad

@@ -19,9 +19,44 @@ The app target is `BankOfDad`. Unit tests live in `BankOfDadTests`, and end-to-e
 2. In Xcode, run the app on an iOS 17 simulator. The default `API_BASE_URL` build setting is `http://localhost:8080`, and the simulator can reach that directly.
 3. To use another backend, for example the [Tailscale-hosted server](../deploy/README.md) on a physical device, copy `Config/Local.xcconfig.example` to `Config/Local.xcconfig` (gitignored) and set `API_BASE_URL = https:/$()/bankofdad.<tailnet>.ts.net`. The next build uses it. `API_BASE_URL` defaults to `http://localhost:8080` in `Config/App.xcconfig`. App Transport Security only allows plain HTTP to `localhost` and `127.0.0.1`, so remote servers must use HTTPS, which the Tailscale setup provides.
 
+## Install on family devices (TestFlight)
+
+TestFlight installs the app on real iPhones without an App Store listing. You need a paid Apple Developer Program membership. Every phone also needs [Tailscale](../deploy/README.md#family-devices) connected, because that's how it reaches the server.
+
+### One-time setup
+
+1. **Settings:** copy `Config/Local.xcconfig.example` to `Config/Local.xcconfig` and set:
+   - `API_BASE_URL`: your server, e.g. `https:/$()/bankofdad.<tailnet>.ts.net`;
+   - `BANKOFDAD_BUNDLE_ID`: a reverse-DNS ID you own, e.g. `com.yourname.bankofdad`. It's permanent once the app exists in App Store Connect;
+   - `DEVELOPMENT_TEAM`: your team ID, from developer.apple.com > Account > Membership details.
+2. **Xcode:** sign in under Xcode > Settings > Accounts. If your team has never had a device registered, connect your iPhone and run the app from Xcode once first. Archiving needs a development profile, and Apple only issues one when the team has at least one device.
+3. **Register the bundle ID:** run `UPLOAD=0 ./scripts/testflight.sh` once. Xcode's automatic signing registers the ID with the Sign in with Apple and Push Notifications capabilities.
+4. **App Store Connect:** under Apps, click + > New App. Choose iOS, pick your bundle ID, and enter any SKU. The name must be unique across the App Store, but the home-screen name stays "Bank of Dad".
+5. **Server:** set `APPLE_CLIENT_ID` and `APNS_BUNDLE_ID` to the bundle ID. For push, create an APNs key (Certificates, IDs & Profiles > Keys, choosing Sandbox & Production). Set `APNS_KEY_ID`, set `APNS_TEAM_ID`, and install the `.p8`. Set `APNS_USE_SANDBOX=false`, because TestFlight builds register production push tokens.
+
+### Upload a build
+
+```sh
+./scripts/testflight.sh
+```
+
+The script archives the Release configuration, signs it for App Store distribution and uploads it. The build number is the UTC time (`YYYYMMDD.HHMM`), so each upload is newer than the last. The build appears under TestFlight after processing, which usually takes 5 to 15 minutes. It refuses to run with the placeholder bundle ID, without a team, or with a non-HTTPS `API_BASE_URL`.
+
+| Variable | Purpose |
+|---|---|
+| `BUILD_NUMBER` | Override the build number. |
+| `UPLOAD=0` | Export a signed `.ipa` to `build/export` instead of uploading. |
+| `ASC_KEY_PATH`, `ASC_KEY_ID`, `ASC_ISSUER_ID` | Use an App Store Connect API key instead of the Xcode account, e.g. on a build machine. |
+
+### Invite testers
+
+- **Adults (no review):** add each person under Users and Access with the Developer or Marketing role. Individual memberships allow up to 50 users. Then add them to an **Internal Testing** group on the app's TestFlight tab. They accept the email invite in the TestFlight app. Internal builds install right away and expire after 90 days, so upload a new build before then.
+- **External testers:** create an **External Testing** group and invite by email or public link. The first build of each version goes through TestFlight App Review. Reviewers can't reach a tailnet-only server, so explain that in the review notes.
+- **Children:** Apple IDs for children under 13 may not be able to redeem TestFlight invites. For a child's phone, connect it to the Mac and run the app from Xcode instead. That needs Developer Mode on the phone, and the signing profile lasts a year.
+
 ## Push notifications
 
-`BankOfDad.entitlements` enables Sign in with Apple, APNs development, and remote-notification background mode. Configure an Apple developer team, App ID, APNs key/certificate, and backend push provider before testing device push. APNs registration is skipped until a user is authenticated; tokens are posted to `/api/v1/devices` as sandbox in Debug and production otherwise.
+`BankOfDad.entitlements` enables Sign in with Apple, APNs (development; distribution signing switches it to production), and remote-notification background mode. Configure an Apple developer team, App ID, APNs key/certificate, and backend push provider before testing device push. APNs registration is skipped until a user is authenticated; tokens are posted to `/api/v1/devices` as sandbox in Debug and production otherwise.
 
 ## Pairing notes
 

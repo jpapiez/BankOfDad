@@ -88,9 +88,10 @@ See [`ios/README.md`](ios/README.md) for pointing the app at your backend (`API_
 
 Apple setup checklist:
 
-1. Set your bundle identifier and development team in `ios/project.yml` (and use the same bundle id for `APPLE_CLIENT_ID` / `APNS_BUNDLE_ID` in `.env`).
+1. Set `BANKOFDAD_BUNDLE_ID` and `DEVELOPMENT_TEAM` in `ios/Config/Local.xcconfig` (copy `Local.xcconfig.example`). Use the same bundle ID for `APPLE_CLIENT_ID` and `APNS_BUNDLE_ID` on the server.
 2. Enable the **Sign in with Apple** and **Push Notifications** capabilities for the app ID.
 3. Create an APNs auth key (`.p8`) if you want real push notifications.
+4. To put the app on family phones, see [Install on family devices](ios/README.md#install-on-family-devices-testflight).
 
 > **Note:** the iOS sources were written on Windows and have not yet been compiled. Please build and run the tests in Xcode before relying on them. The areas most worth checking first are: `@Observable` objects injected through the SwiftUI environment, `SignInWithAppleButton` handling, the AVFoundation QR scanner, CoreImage QR generation, and the `URLProtocol`-based `APIClient` tests.
 
