@@ -11,7 +11,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Tokens;
 
-public record PushMessage(NotificationType Type, string Title, string Body, Guid? LoanId, Guid NotificationId);
+public record PushMessage(NotificationType Type, string Title, string Body, Guid? LoanId, Guid NotificationId, Guid? BillId = null);
 
 public interface IPushSender
 {
@@ -50,6 +50,7 @@ public sealed class ApnsPushSender(HttpClient httpClient, IConfiguration configu
                 aps = new { alert = new { title = message.Title, body = message.Body }, sound = "default", badge },
                 type = ToCamel(message.Type.ToString()),
                 loanId = message.LoanId,
+                billId = message.BillId,
                 notificationId = message.NotificationId
             })
         };

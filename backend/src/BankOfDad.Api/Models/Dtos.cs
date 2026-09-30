@@ -15,9 +15,20 @@ public record InstallmentDto(Guid Id, int Seq, DateOnly DueDate, decimal Princip
 public record LateFeeDto(Guid Id, Guid InstallmentId, int InstallmentSeq, decimal Amount, decimal AmountPaid, DateTimeOffset AssessedAt, DateTimeOffset? WaivedAt);
 public record PaymentDto(Guid Id, decimal Amount, DateOnly PaidOn, string? Note, string RecordedByName, DateTimeOffset CreatedAt, IReadOnlyList<PaymentAllocationDto> Allocations);
 public record PaymentAllocationDto(AllocationTarget Target, int? InstallmentSeq, Guid? LateFeeId, decimal Amount);
-public record NotificationDto(Guid Id, NotificationType Type, string Title, string Body, Guid? LoanId, DateTimeOffset CreatedAt, DateTimeOffset? ReadAt);
-public record DashboardDto(decimal TotalOutstanding, int ActiveLoans, int LateInstallments, IReadOnlyList<UpcomingDto> Upcoming);
+public record NotificationDto(Guid Id, NotificationType Type, string Title, string Body, Guid? LoanId, DateTimeOffset CreatedAt, DateTimeOffset? ReadAt, Guid? BillId);
+// TotalOutstanding includes what's owed on bills; ActiveLoans, LateInstallments and Upcoming stay loan-only for older clients.
+public record DashboardDto(decimal TotalOutstanding, int ActiveLoans, int LateInstallments, IReadOnlyList<UpcomingDto> Upcoming, int ActiveBills, int LateBillCharges, IReadOnlyList<UpcomingBillDto> UpcomingBills);
 public record UpcomingDto(Guid LoanId, string LoanTitle, string ChildName, DateOnly DueDate, decimal AmountDue);
+public record UpcomingBillDto(Guid BillId, string BillTitle, string ChildName, DateOnly DueDate, decimal AmountDue);
+
+public record BillInput(Guid ChildId, string Title, decimal Amount, Frequency Frequency, DateOnly FirstDueDate, decimal? LateFeeFlat, decimal? LateFeePercent, int LateFeeGraceDays, bool SendReminders, bool SendReceipts);
+public record BillPatchRequest(string? Title, decimal? Amount, bool? SendReminders, bool? SendReceipts);
+public record BillSummaryDto(Guid Id, string Title, Guid ChildId, string ChildName, decimal Amount, Frequency Frequency, BillStatus Status, decimal Balance, decimal UpcomingAmount, decimal AmountPaid, DateOnly? NextDueDate, decimal? NextAmountDue, int LateCharges, DateTimeOffset CreatedAt, DateTimeOffset? EndedAt);
+public record BillDetailDto(Guid Id, string Title, Guid ChildId, string ChildName, decimal Amount, Frequency Frequency, BillStatus Status, decimal Balance, decimal UpcomingAmount, decimal AmountPaid, DateOnly? NextDueDate, decimal? NextAmountDue, int LateCharges, DateTimeOffset CreatedAt, DateTimeOffset? EndedAt, DateOnly FirstDueDate, decimal? LateFeeFlat, decimal? LateFeePercent, int LateFeeGraceDays, bool SendReminders, bool SendReceipts, decimal OutstandingFees, IReadOnlyList<BillChargeDto> Charges, IReadOnlyList<BillPaymentDto> Payments, IReadOnlyList<BillLateFeeDto> LateFees, string TermsSummary);
+public record BillChargeDto(Guid Id, int Seq, DateOnly DueDate, decimal Amount, decimal AmountPaid, decimal Remaining, InstallmentStatus Status);
+public record BillLateFeeDto(Guid Id, Guid ChargeId, DateOnly ChargeDueDate, decimal Amount, decimal AmountPaid, DateTimeOffset AssessedAt, DateTimeOffset? WaivedAt);
+public record BillPaymentDto(Guid Id, decimal Amount, DateOnly PaidOn, string? Note, string RecordedByName, DateTimeOffset CreatedAt, IReadOnlyList<BillPaymentAllocationDto> Allocations);
+public record BillPaymentAllocationDto(AllocationTarget Target, Guid? ChargeId, DateOnly? ChargeDueDate, Guid? LateFeeId, decimal Amount);
 
 public record RegisterRequest(string Email, string Password, string DisplayName, string FamilyName, string TimeZone);
 public record LoginRequest(string Email, string Password);

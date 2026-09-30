@@ -28,6 +28,7 @@ public static class ClaimsPrincipalExtensions
 {
     public static Guid UserId(this ClaimsPrincipal user) => Guid.Parse(user.FindFirstValue(JwtRegisteredClaimNames.Sub) ?? user.FindFirstValue(ClaimTypes.NameIdentifier) ?? throw new InvalidOperationException("Missing sub claim."));
     public static Guid FamilyId(this ClaimsPrincipal user) => Guid.Parse(user.FindFirstValue("family_id") ?? throw new InvalidOperationException("Missing family_id claim."));
+    public static bool IsChild(this ClaimsPrincipal user) => user.FindFirstValue("role") == "child";
 }
 
 public sealed class AuthService(BankOfDadDbContext db, IPasswordService passwords, IClock clock, IConfiguration configuration)
@@ -99,9 +100,14 @@ public sealed class AuthService(BankOfDadDbContext db, IPasswordService password
 
 public sealed class NotificationService(BankOfDadDbContext db, IPushSender pushSender, IClock clock)
 {
-    public async Task<Notification> CreateAndPushAsync(Guid userId, NotificationType type, string title, string body, Guid? loanId, CancellationToken ct)
+    public Task<Notification> CreateAndPushAsync(Guid userId, NotificationType type, string title, string body, Guid? loanId, CancellationToken ct) =>
+        CreateAndPushCoreAsync(new Notification { UserId = userId, Type = type, Title = title, Body = body, LoanId = loanId, CreatedAt = clock.UtcNow }, ct);
+
+    public Task<Notification> CreateAndPushForBillAsync(Guid userId, NotificationType type, string title, string body, Guid billId, CancellationToken ct) =>
+        CreateAndPushCoreAsync(new Notification { UserId = userId, Type = type, Title = title, Body = body, BillId = billId, CreatedAt = clock.UtcNow }, ct);
+
+    private async Task<Notification> CreateAndPushCoreAsync(Notification notification, CancellationToken ct)
     {
-        var notification = new Notification { UserId = userId, Type = type, Title = title, Body = body, LoanId = loanId, CreatedAt = clock.UtcNow };
         db.Notifications.Add(notification);
         await db.SaveChangesAsync(ct).ConfigureAwait(false);
         await PushAsync(notification, ct).ConfigureAwait(false);
@@ -113,7 +119,7 @@ public sealed class NotificationService(BankOfDadDbContext db, IPushSender pushS
         var tokens = await db.DeviceTokens.Where(x => x.UserId == notification.UserId).ToListAsync(ct).ConfigureAwait(false);
         if (tokens.Count == 0) return;
         var badge = await db.Notifications.CountAsync(x => x.UserId == notification.UserId && x.ReadAt == null, ct).ConfigureAwait(false);
-        var message = new PushMessage(notification.Type, notification.Title, notification.Body, notification.LoanId, notification.Id);
+        var message = new PushMessage(notification.Type, notification.Title, notification.Body, notification.LoanId, notification.Id, notification.BillId);
         foreach (var token in tokens)
         {
             await pushSender.SendAsync(token, message, badge, ct).ConfigureAwait(false);
@@ -123,7 +129,7 @@ public sealed class NotificationService(BankOfDadDbContext db, IPushSender pushS
     }
 }
 
-public sealed class LoanSweeper(BankOfDadDbContext db, LoanStateService state, NotificationService notifications, IClock clock)
+public sealed class LoanSweeper(BankOfDadDbContext db, LoanStateService state, NotificationService notifications, BillSweeper bills, IClock clock)
 {
     public Task SweepAsync(CancellationToken ct = default) => SweepCoreAsync(null, ct);
 
@@ -170,6 +176,7 @@ public sealed class LoanSweeper(BankOfDadDbContext db, LoanStateService state, N
                 }
             }
             await db.SaveChangesAsync(ct).ConfigureAwait(false);
+            await bills.SweepFamilyAsync(family.Id, today, ct).ConfigureAwait(false);
         }
     }
 
@@ -202,6 +209,7 @@ public static class DtoMapper
 {
     private static readonly LoanStateService State = new();
     private static readonly TermsSummaryBuilder Terms = new();
+    private static readonly BillStateService BillState = new();
 
     public static UserDto User(User user) => new(user.Id, user.FamilyId, user.Role, user.DisplayName, user.Email);
     public static ChildDto Child(User user, int pairedDevices = 0) => new(user.Id, user.DisplayName, user.AvatarColor, pairedDevices);
@@ -233,5 +241,21 @@ public static class DtoMapper
     }
 
     public static PaymentDto Payment(Payment payment) => new(payment.Id, payment.Amount, payment.PaidOn, payment.Note, payment.RecordedByUser?.DisplayName ?? string.Empty, payment.CreatedAt, payment.Allocations.Select(a => new PaymentAllocationDto(a.Target, a.Installment?.Seq, a.LateFeeId, a.Amount)).ToList());
-    public static NotificationDto Notification(Notification notification) => new(notification.Id, notification.Type, notification.Title, notification.Body, notification.LoanId, notification.CreatedAt, notification.ReadAt);
+    public static BillSummaryDto BillSummary(Bill bill, DateOnly today)
+    {
+        var next = bill.Charges.OrderBy(x => x.Seq).FirstOrDefault(x => BillState.ChargeRemaining(x) > 0m);
+        return new BillSummaryDto(bill.Id, bill.Title, bill.ChildId, bill.Child?.DisplayName ?? string.Empty, bill.Amount, bill.Frequency, bill.Status, BillState.Balance(bill, today), BillState.UpcomingAmount(bill, today), BillState.AmountPaid(bill), next?.DueDate, next is null ? null : BillState.ChargeRemaining(next), bill.Charges.Count(x => BillState.Status(x, today, bill.LateFeeGraceDays) == InstallmentStatus.Late), bill.CreatedAt, bill.EndedAt);
+    }
+
+    public static BillDetailDto BillDetail(Bill bill, DateOnly today)
+    {
+        var s = BillSummary(bill, today);
+        var charges = bill.Charges.OrderByDescending(x => x.Seq).Select(x => new BillChargeDto(x.Id, x.Seq, x.DueDate, x.Amount, x.AmountPaid, BillState.ChargeRemaining(x), BillState.Status(x, today, bill.LateFeeGraceDays))).ToList();
+        var lateFees = bill.LateFees.OrderBy(x => x.AssessedAt).Select(x => new BillLateFeeDto(x.Id, x.ChargeId, bill.Charges.Single(c => c.Id == x.ChargeId).DueDate, x.Amount, x.AmountPaid, x.AssessedAt, x.WaivedAt)).ToList();
+        var payments = bill.Payments.OrderByDescending(x => x.CreatedAt).Select(BillPayment).ToList();
+        return new BillDetailDto(s.Id, s.Title, s.ChildId, s.ChildName, s.Amount, s.Frequency, s.Status, s.Balance, s.UpcomingAmount, s.AmountPaid, s.NextDueDate, s.NextAmountDue, s.LateCharges, s.CreatedAt, s.EndedAt, bill.FirstDueDate, bill.LateFeeFlat, bill.LateFeePercent, bill.LateFeeGraceDays, bill.SendReminders, bill.SendReceipts, BillState.OutstandingFees(bill), charges, payments, lateFees, Terms.Build(bill, s.ChildName));
+    }
+
+    public static BillPaymentDto BillPayment(BillPayment payment) => new(payment.Id, payment.Amount, payment.PaidOn, payment.Note, payment.RecordedByUser?.DisplayName ?? string.Empty, payment.CreatedAt, payment.Allocations.Select(a => new BillPaymentAllocationDto(a.Target, a.ChargeId, a.Charge?.DueDate, a.LateFeeId, a.Amount)).ToList());
+    public static NotificationDto Notification(Notification notification) => new(notification.Id, notification.Type, notification.Title, notification.Body, notification.LoanId, notification.CreatedAt, notification.ReadAt, notification.BillId);
 }

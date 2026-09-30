@@ -1,11 +1,12 @@
 namespace BankOfDad.Domain;
 
 public enum Role { Parent, Child }
-public enum Frequency { Weekly, Biweekly, Monthly }
+public enum Frequency { Weekly, Biweekly, Monthly, Quarterly, Yearly }
 public enum LoanStatus { Active, PaidOff, Cancelled }
+public enum BillStatus { Active, Ended }
 public enum InstallmentStatus { Upcoming, Due, Late, Paid }
-public enum NotificationType { Reminder, Receipt, LoanCreated, LateFee }
-public enum AllocationTarget { LateFee, Interest, Principal }
+public enum NotificationType { Reminder, Receipt, LoanCreated, LateFee, BillCreated }
+public enum AllocationTarget { LateFee, Interest, Principal, Charge }
 
 public static class Money
 {
