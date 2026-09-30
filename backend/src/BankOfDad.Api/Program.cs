@@ -50,6 +50,11 @@ builder.Services.AddScoped<ScheduleCalculator>();
 builder.Services.AddScoped<LoanStateService>();
 builder.Services.AddScoped<PaymentAllocator>();
 builder.Services.AddScoped<TermsSummaryBuilder>();
+builder.Services.AddScoped<BillStateService>();
+builder.Services.AddScoped<BillScheduler>();
+builder.Services.AddScoped<BillPaymentAllocator>();
+builder.Services.AddScoped<BillChargeGenerator>();
+builder.Services.AddScoped<BillSweeper>();
 builder.Services.AddSingleton<IClock, SystemClock>();
 builder.Services.AddScoped<IPasswordService, PasswordService>();
 builder.Services.AddScoped<IAppleTokenValidator, AppleTokenValidator>();
@@ -102,8 +107,9 @@ app.UseExceptionHandler(errorApp => errorApp.Run(async context =>
     {
         ApiException apiException => apiException,
         BadHttpRequestException badRequest => new ApiException(badRequest.StatusCode, "Invalid request.", badRequest.Message),
-        DbUpdateConcurrencyException => new ApiException(409, "The loan was changed by someone else. Please retry."),
-        PostgresException { SqlState: PostgresErrorCodes.SerializationFailure } => new ApiException(409, "The loan was changed by someone else. Please retry."),
+        DbUpdateConcurrencyException => new ApiException(409, "This was changed by someone else. Please retry."),
+        PostgresException { SqlState: PostgresErrorCodes.SerializationFailure or PostgresErrorCodes.DeadlockDetected } => new ApiException(409, "This was changed by someone else. Please retry."),
+        DbUpdateException { InnerException: PostgresException { SqlState: PostgresErrorCodes.SerializationFailure or PostgresErrorCodes.DeadlockDetected } } => new ApiException(409, "This was changed by someone else. Please retry."),
         _ => null
     };
     var status = api?.Status ?? StatusCodes.Status500InternalServerError;
@@ -386,15 +392,22 @@ loans.MapPost("/{loanId:guid}/late-fees/{lateFeeId:guid}/waive", async (Guid loa
     return Results.Ok(DtoMapper.LoanDetail(loan, TodayFor(await GetFamilyTimeZone(user.FamilyId(), db, ct), clock)));
 });
 
-api.MapGet("/dashboard", async (ClaimsPrincipal user, BankOfDadDbContext db, IClock clock, CancellationToken ct) =>
+api.MapGet("/dashboard", async (ClaimsPrincipal user, BankOfDadDbContext db, BillChargeGenerator billCharges, IClock clock, CancellationToken ct) =>
 {
     var tz = await GetFamilyTimeZone(user.FamilyId(), db, ct);
     var today = TodayFor(tz, clock);
     var loansList = await db.Loans.IncludeAll().Where(x => x.FamilyId == user.FamilyId() && x.Status == LoanStatus.Active).ToListAsync(ct);
     var state = new LoanStateService();
     var upcoming = loansList.SelectMany(l => l.Installments.Where(i => state.InstallmentRemaining(i) > 0m && i.DueDate <= today.AddDays(30)).Select(i => new UpcomingDto(l.Id, l.Title, l.BorrowerChild?.DisplayName ?? string.Empty, i.DueDate, state.InstallmentRemaining(i)))).OrderBy(x => x.DueDate).ToList();
-    return Results.Ok(new DashboardDto(loansList.Sum(state.Balance), loansList.Count, loansList.Sum(l => l.Installments.Count(i => state.Status(i, today, l.LateFeeGraceDays) == InstallmentStatus.Late)), upcoming));
+    await billCharges.EnsureChargesAsync(user.FamilyId(), today, null, ct);
+    var billsList = await db.Bills.Include(x => x.Child).Include(x => x.Charges).Include(x => x.LateFees).Where(x => x.FamilyId == user.FamilyId()).ToListAsync(ct);
+    var billState = new BillStateService();
+    var upcomingBills = billsList.SelectMany(b => b.Charges.Where(c => billState.ChargeRemaining(c) > 0m && c.DueDate <= today.AddDays(30)).Select(c => new UpcomingBillDto(b.Id, b.Title, b.Child?.DisplayName ?? string.Empty, c.DueDate, billState.ChargeRemaining(c)))).OrderBy(x => x.DueDate).ToList();
+    var lateBillCharges = billsList.Sum(b => b.Charges.Count(c => billState.Status(c, today, b.LateFeeGraceDays) == InstallmentStatus.Late));
+    return Results.Ok(new DashboardDto(loansList.Sum(state.Balance) + billsList.Sum(b => billState.Balance(b, today)), loansList.Count, loansList.Sum(l => l.Installments.Count(i => state.Status(i, today, l.LateFeeGraceDays) == InstallmentStatus.Late)), upcoming, billsList.Count(b => b.Status == BillStatus.Active), lateBillCharges, upcomingBills));
 }).RequireAuthorization("Parent");
+
+api.MapBills();
 
 var childGroup = api.MapGroup("/me").RequireAuthorization("Child");
 childGroup.MapGet("/loans", async (ClaimsPrincipal user, BankOfDadDbContext db, IClock clock, CancellationToken ct) =>

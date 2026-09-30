@@ -41,6 +41,27 @@ struct LoanService: Sendable {
     func myLoan(_ id: UUID) async throws -> LoanDetail { try await api.get("/me/loans/\(id.uuidString)") }
 }
 
+struct BillService: Sendable {
+    let api: APIClient
+
+    func bills(status: BillStatus? = nil, childId: UUID? = nil) async throws -> [BillSummary] {
+        var query: [URLQueryItem] = []
+        if let status, status != .unknown { query.append(URLQueryItem(name: "status", value: status.rawValue)) }
+        if let childId { query.append(URLQueryItem(name: "childId", value: childId.uuidString)) }
+        return try await api.get("/bills", queryItems: query)
+    }
+    func bill(_ id: UUID) async throws -> BillDetail { try await api.get("/bills/\(id.uuidString)") }
+    func create(_ input: BillInput) async throws -> BillDetail { try await api.post("/bills", body: input) }
+    func update(_ id: UUID, title: String? = nil, amount: Decimal? = nil, sendReminders: Bool? = nil, sendReceipts: Bool? = nil) async throws -> BillDetail {
+        try await api.patch("/bills/\(id.uuidString)", body: UpdateBillRequest(title: title, amount: amount, sendReminders: sendReminders, sendReceipts: sendReceipts))
+    }
+    func end(_ id: UUID) async throws -> BillDetail { try await api.post("/bills/\(id.uuidString)/end") }
+    func recordPayment(billId: UUID, amount: Decimal, paidOn: CalendarDate, note: String?) async throws -> BillPayment {
+        try await api.post("/bills/\(billId.uuidString)/payments", body: PaymentRequest(amount: amount, paidOn: paidOn, note: note?.isEmpty == true ? nil : note))
+    }
+    func waiveFee(billId: UUID, lateFeeId: UUID) async throws -> BillDetail { try await api.post("/bills/\(billId.uuidString)/late-fees/\(lateFeeId.uuidString)/waive") }
+}
+
 struct NotificationService: Sendable {
     let api: APIClient
 
@@ -57,6 +78,7 @@ struct UpdateFamilyRequest: Encodable { let name: String?; let timeZone: String?
 struct ChildRequest: Encodable { let displayName: String?; let avatarColor: String? }
 struct InviteRequest: Encodable { let email: String? }
 struct UpdateLoanRequest: Encodable { let title: String?; let sendReminders: Bool?; let sendReceipts: Bool? }
+struct UpdateBillRequest: Encodable { let title: String?; let amount: Decimal?; let sendReminders: Bool?; let sendReceipts: Bool? }
 struct UpdateInstallmentRequest: Encodable { let dueDate: CalendarDate }
 struct PaymentRequest: Encodable { let amount: Decimal; let paidOn: CalendarDate; let note: String? }
 struct DeviceRequest: Encodable { let apnsToken: String; let environment: String }

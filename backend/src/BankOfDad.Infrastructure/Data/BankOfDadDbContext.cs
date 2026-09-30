@@ -19,10 +19,20 @@ public sealed class BankOfDadDbContext(DbContextOptions<BankOfDadDbContext> opti
     public DbSet<Payment> Payments => Set<Payment>();
     public DbSet<PaymentAllocation> PaymentAllocations => Set<PaymentAllocation>();
     public DbSet<Notification> Notifications => Set<Notification>();
+    public DbSet<Bill> Bills => Set<Bill>();
+    public DbSet<BillCharge> BillCharges => Set<BillCharge>();
+    public DbSet<BillLateFee> BillLateFees => Set<BillLateFee>();
+    public DbSet<BillPayment> BillPayments => Set<BillPayment>();
+    public DbSet<BillPaymentAllocation> BillPaymentAllocations => Set<BillPaymentAllocation>();
 
     public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
         foreach (var entry in ChangeTracker.Entries<Loan>().Where(x => x.State == EntityState.Modified))
+        {
+            entry.Entity.ConcurrencyToken = Guid.NewGuid();
+        }
+
+        foreach (var entry in ChangeTracker.Entries<Bill>().Where(x => x.State == EntityState.Modified))
         {
             entry.Entity.ConcurrencyToken = Guid.NewGuid();
         }
@@ -35,6 +45,7 @@ public sealed class BankOfDadDbContext(DbContextOptions<BankOfDadDbContext> opti
         var roleConverter = new EnumToStringConverter<Role>();
         var frequencyConverter = new EnumToStringConverter<Frequency>();
         var loanStatusConverter = new EnumToStringConverter<LoanStatus>();
+        var billStatusConverter = new EnumToStringConverter<BillStatus>();
         var notificationConverter = new EnumToStringConverter<NotificationType>();
         var allocationConverter = new EnumToStringConverter<AllocationTarget>();
 
@@ -125,6 +136,52 @@ public sealed class BankOfDadDbContext(DbContextOptions<BankOfDadDbContext> opti
         });
 
         modelBuilder.Entity<PaymentAllocation>(b =>
+        {
+            Money(b.Property(x => x.Amount));
+            b.Property(x => x.Target).HasConversion(allocationConverter).HasMaxLength(20);
+        });
+
+        modelBuilder.Entity<Bill>(b =>
+        {
+            b.Property(x => x.Title).HasMaxLength(100).IsRequired();
+            Money(b.Property(x => x.Amount));
+            Money(b.Property(x => x.LateFeeFlat));
+            b.Property(x => x.LateFeePercent).HasColumnType("numeric(9,6)");
+            b.Property(x => x.Frequency).HasConversion(frequencyConverter).HasMaxLength(20);
+            b.Property(x => x.Status).HasConversion(billStatusConverter).HasMaxLength(20);
+            b.Property(x => x.ConcurrencyToken).IsConcurrencyToken();
+            b.HasOne(x => x.Child).WithMany().HasForeignKey(x => x.ChildId);
+            b.HasOne(x => x.CreatedByParent).WithMany().HasForeignKey(x => x.CreatedByParentId);
+            b.HasIndex(x => new { x.FamilyId, x.Status });
+            b.HasIndex(x => x.ChildId);
+        });
+
+        modelBuilder.Entity<BillCharge>(b =>
+        {
+            Money(b.Property(x => x.Amount));
+            Money(b.Property(x => x.AmountPaid));
+            // Charge generation relies on these to stay idempotent (INSERT ... ON CONFLICT DO NOTHING).
+            b.HasIndex(x => new { x.BillId, x.DueDate }).IsUnique();
+            b.HasIndex(x => new { x.BillId, x.Seq }).IsUnique();
+        });
+
+        modelBuilder.Entity<BillLateFee>(b =>
+        {
+            Money(b.Property(x => x.Amount));
+            Money(b.Property(x => x.AmountPaid));
+            b.HasOne(x => x.Charge).WithMany().HasForeignKey(x => x.ChargeId);
+            b.HasIndex(x => x.ChargeId).IsUnique();
+            b.HasIndex(x => new { x.BillId, x.AssessedAt });
+        });
+
+        modelBuilder.Entity<BillPayment>(b =>
+        {
+            Money(b.Property(x => x.Amount));
+            b.Property(x => x.Note).HasMaxLength(500);
+            b.HasIndex(x => new { x.BillId, x.CreatedAt });
+        });
+
+        modelBuilder.Entity<BillPaymentAllocation>(b =>
         {
             Money(b.Property(x => x.Amount));
             b.Property(x => x.Target).HasConversion(allocationConverter).HasMaxLength(20);

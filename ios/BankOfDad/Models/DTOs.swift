@@ -152,6 +152,7 @@ struct AppNotification: Codable, Identifiable, Hashable, Sendable {
     let loanId: UUID?
     let createdAt: Date
     var readAt: Date?
+    var billId: UUID? = nil
 }
 
 struct Dashboard: Codable, Hashable, Sendable {
@@ -159,6 +160,120 @@ struct Dashboard: Codable, Hashable, Sendable {
     let activeLoans: Int
     let lateInstallments: Int
     let upcoming: [UpcomingItem]
+    var activeBills: Int? = nil
+    var lateBillCharges: Int? = nil
+    var upcomingBills: [UpcomingBillItem]? = nil
+}
+
+struct UpcomingBillItem: Codable, Identifiable, Hashable, Sendable {
+    var id: String { "\(billId)-\(dueDate)" }
+    let billId: UUID
+    let billTitle: String
+    let childName: String
+    let dueDate: CalendarDate
+    let amountDue: Decimal
+}
+
+struct BillInput: Codable, Hashable, Sendable {
+    var childId: UUID
+    var title: String
+    var amount: Decimal
+    var frequency: Frequency
+    var firstDueDate: CalendarDate
+    var lateFeeFlat: Decimal?
+    var lateFeePercent: Decimal?
+    var lateFeeGraceDays: Int
+    var sendReminders: Bool
+    var sendReceipts: Bool
+}
+
+struct BillSummary: Codable, Identifiable, Hashable, Sendable {
+    let id: UUID
+    let title: String
+    let childId: UUID
+    let childName: String
+    let amount: Decimal
+    let frequency: Frequency
+    let status: BillStatus
+    let balance: Decimal
+    let upcomingAmount: Decimal
+    let amountPaid: Decimal
+    let nextDueDate: CalendarDate?
+    let nextAmountDue: Decimal?
+    let lateCharges: Int
+    let createdAt: Date
+    let endedAt: Date?
+}
+
+struct BillDetail: Codable, Identifiable, Hashable, Sendable {
+    let id: UUID
+    var title: String
+    let childId: UUID
+    let childName: String
+    var amount: Decimal
+    let frequency: Frequency
+    var status: BillStatus
+    var balance: Decimal
+    var upcomingAmount: Decimal
+    var amountPaid: Decimal
+    var nextDueDate: CalendarDate?
+    var nextAmountDue: Decimal?
+    var lateCharges: Int
+    let createdAt: Date
+    var endedAt: Date?
+    let firstDueDate: CalendarDate
+    let lateFeeFlat: Decimal?
+    let lateFeePercent: Decimal?
+    let lateFeeGraceDays: Int
+    var sendReminders: Bool
+    var sendReceipts: Bool
+    var outstandingFees: Decimal
+    var charges: [BillCharge]
+    var payments: [BillPayment]
+    var lateFees: [BillLateFee]
+    let termsSummary: String
+
+    /// Everything that can be paid right now: what is owed plus the next upcoming charge.
+    var payable: Decimal { balance + upcomingAmount }
+}
+
+struct BillCharge: Codable, Identifiable, Hashable, Sendable {
+    let id: UUID
+    let seq: Int
+    let dueDate: CalendarDate
+    let amount: Decimal
+    let amountPaid: Decimal
+    let remaining: Decimal
+    let status: InstallmentStatus
+}
+
+struct BillLateFee: Codable, Identifiable, Hashable, Sendable {
+    let id: UUID
+    let chargeId: UUID
+    let chargeDueDate: CalendarDate
+    let amount: Decimal
+    let amountPaid: Decimal
+    let assessedAt: Date
+    let waivedAt: Date?
+}
+
+struct BillPayment: Codable, Identifiable, Hashable, Sendable {
+    let id: UUID
+    let amount: Decimal
+    let paidOn: CalendarDate
+    let note: String?
+    let recordedByName: String
+    let createdAt: Date
+    let allocations: [BillAllocation]
+}
+
+struct BillAllocation: Codable, Identifiable, Hashable, Sendable {
+    var id: String { "\(target.rawValue)-\(chargeId?.uuidString ?? "none")-\(lateFeeId?.uuidString ?? "none")-\(amount)" }
+    let target: AllocationTarget
+    let chargeId: UUID?
+    let chargeDueDate: CalendarDate?
+    let lateFeeId: UUID?
+    let amount: Decimal
 }
 
 struct UpcomingItem: Codable, Identifiable, Hashable, Sendable {

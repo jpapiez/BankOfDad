@@ -176,6 +176,22 @@ final class TestAPI {
         try send("POST", "/api/v1/testing/sweep", token: parent.token)
     }
 
+    func createBill(_ parent: Parent, childId: String, title: String, amount: Decimal, frequency: String = "monthly", firstDueDate: Date = Date()) throws -> BillDetail {
+        let body: [String: Any] = [
+            "childId": childId, "title": title, "amount": amount as NSDecimalNumber, "frequency": frequency,
+            "firstDueDate": Self.day(firstDueDate), "lateFeeGraceDays": 0, "sendReminders": true, "sendReceipts": true
+        ]
+        return try decode(BillDetail.self, "POST", "/api/v1/bills", body: body, token: parent.token)
+    }
+
+    func bill(_ token: String, _ billId: String) throws -> BillDetail {
+        try decode(BillDetail.self, "GET", "/api/v1/bills/\(billId)", token: token)
+    }
+
+    func bills(_ token: String) throws -> [BillSummary] {
+        try decode([BillSummary].self, "GET", "/api/v1/bills", token: token)
+    }
+
     func notifications(_ token: String, unreadOnly: Bool = false) throws -> [NotificationItem] {
         try decode([NotificationItem].self, "GET", "/api/v1/notifications?unreadOnly=\(unreadOnly)", token: token)
     }
@@ -295,10 +311,43 @@ struct LoanDetail: Decodable {
     let payments: [Payment]
 }
 
+struct BillSummary: Decodable {
+    let id: String
+    let title: String
+    let status: String
+}
+
+struct BillDetail: Decodable {
+    struct Charge: Decodable {
+        let seq: Int
+        let dueDate: String
+        let amount: Decimal
+        let remaining: Decimal
+        let status: String
+    }
+    struct Payment: Decodable {
+        let amount: Decimal
+        let note: String?
+    }
+
+    let id: String
+    let title: String
+    let childId: String
+    let status: String
+    let amount: Decimal
+    let frequency: String
+    let balance: Decimal
+    let amountPaid: Decimal
+    let firstDueDate: String
+    let charges: [Charge]
+    let payments: [Payment]
+}
+
 struct NotificationItem: Decodable {
     let id: String
     let type: String
     let title: String
     let loanId: String?
     let readAt: String?
+    let billId: String?
 }

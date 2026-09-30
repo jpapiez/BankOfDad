@@ -15,11 +15,14 @@ Any change here must be reflected on both sides.
 
 ## Enums
 - `Role`: `parent`, `child`
-- `Frequency`: `weekly`, `biweekly`, `monthly`
+- `Frequency`: `weekly`, `biweekly`, `monthly`, `quarterly`, `yearly` (`quarterly` and `yearly` are accepted for loans too)
 - `LoanStatus`: `active`, `paidOff`, `cancelled`
-- `InstallmentStatus`: `upcoming` (due date in future), `due` (due today / within grace), `late` (past grace, not fully paid), `paid`
-- `NotificationType`: `reminder`, `receipt`, `loanCreated`, `lateFee`
-- `AllocationTarget`: `lateFee`, `interest`, `principal`
+- `BillStatus`: `active`, `ended`
+- `InstallmentStatus`: `upcoming` (due date in future), `due` (due today / within grace), `late` (past grace, not fully paid), `paid` (also used for bill charges)
+- `NotificationType`: `reminder`, `receipt`, `loanCreated`, `lateFee`, `billCreated`
+- `AllocationTarget`: `lateFee`, `interest`, `principal`, `charge` (bill payments)
+
+Clients must tolerate enum values they don't know yet.
 
 ## Shared shapes
 ```jsonc
@@ -72,12 +75,45 @@ Any change here must be reflected on both sides.
 { "id": "uuid", "amount": 50.73, "paidOn": "2026-11-01", "note": "Cash", "recordedByName": "Dad", "createdAt": "…",
   "allocations": [ { "target": "interest", "installmentSeq": 1, "lateFeeId": null, "amount": 1.25 } ] }
 
-// NotificationDto
-{ "id": "uuid", "type": "receipt", "title": "Payment received", "body": "…", "loanId": "uuid", "createdAt": "…", "readAt": null }
+// NotificationDto — exactly one of loanId / billId is set for loan and bill notifications
+{ "id": "uuid", "type": "receipt", "title": "Payment received", "body": "…", "loanId": "uuid", "createdAt": "…", "readAt": null, "billId": null }
 
-// DashboardDto
-{ "totalOutstanding": 203.10, "activeLoans": 1, "lateInstallments": 0,
-  "upcoming": [ { "loanId": "uuid", "loanTitle": "New bike", "childName": "Sam", "dueDate": "2027-01-01", "amountDue": 50.73 } ] }
+// DashboardDto — totalOutstanding = loan balances + bill balances (what is owed now)
+{ "totalOutstanding": 248.10, "activeLoans": 1, "lateInstallments": 0,
+  "upcoming": [ { "loanId": "uuid", "loanTitle": "New bike", "childName": "Sam", "dueDate": "2027-01-01", "amountDue": 50.73 } ],
+  "activeBills": 1, "lateBillCharges": 0,
+  "upcomingBills": [ { "billId": "uuid", "billTitle": "Cell phone", "childName": "Sam", "dueDate": "2027-01-01", "amountDue": 45.00 } ] }
+
+// BillInput (create)
+{ "childId": "uuid", "title": "Cell phone", "amount": 45.00, "frequency": "monthly", "firstDueDate": "2026-11-01",
+  "lateFeeFlat": 2.00, "lateFeePercent": 0.10, "lateFeeGraceDays": 3,   // flat & percent nullable; grace default 0
+  "sendReminders": true, "sendReceipts": true }
+
+// BillSummaryDto
+{ "id": "uuid", "title": "Cell phone", "childId": "uuid", "childName": "Sam", "amount": 45.00, "frequency": "monthly",
+  "status": "active", "balance": 45.00, "upcomingAmount": 45.00, "amountPaid": 90.00,
+  "nextDueDate": "2027-01-01", "nextAmountDue": 45.00, "lateCharges": 0, "createdAt": "…", "endedAt": null }
+// amount = the current per-charge amount (applies to charges not yet generated / not yet due).
+// balance = unpaid charges already due (due date ≤ today) + outstanding late fees: what is owed now.
+// upcomingAmount = unpaid charges not yet due. nextDueDate / nextAmountDue = earliest unpaid charge (null when none).
+
+// BillDetailDto = all BillSummaryDto fields plus:
+{ "firstDueDate": "2026-11-01", "lateFeeFlat": 2.00, "lateFeePercent": 0.10, "lateFeeGraceDays": 3,
+  "sendReminders": true, "sendReceipts": true, "outstandingFees": 0.00,
+  "charges": [BillChargeDto],        // newest first
+  "payments": [BillPaymentDto],      // newest first
+  "lateFees": [BillLateFeeDto],
+  "termsSummary": "Sam pays $45.00 monthly for \"Cell phone\" starting Nov 1, 2026, until the bill is ended. A late fee of $2.00 + 10% of the missed payment applies 3 days after a missed due date." }
+
+// BillChargeDto
+{ "id": "uuid", "seq": 3, "dueDate": "2027-01-01", "amount": 45.00, "amountPaid": 0.00, "remaining": 45.00, "status": "upcoming" }
+
+// BillLateFeeDto
+{ "id": "uuid", "chargeId": "uuid", "chargeDueDate": "2026-12-01", "amount": 6.50, "amountPaid": 0.00, "assessedAt": "…", "waivedAt": null }
+
+// BillPaymentDto
+{ "id": "uuid", "amount": 60.00, "paidOn": "2026-12-04", "note": "Allowance", "recordedByName": "Dad", "createdAt": "…",
+  "allocations": [ { "target": "charge", "chargeId": "uuid", "chargeDueDate": "2026-11-01", "lateFeeId": null, "amount": 45.00 } ] }
 ```
 
 ## Endpoints
@@ -122,6 +158,20 @@ Password rules: min 8 chars. Emails unique, case-insensitive.
 | POST | `/api/v1/loans/{loanId}/late-fees/{lateFeeId}/waive` | — | `LoanDetailDto` |
 | GET | `/api/v1/dashboard` | — | `DashboardDto` (upcoming = unpaid installments due in the next 30 days, plus late ones) |
 
+### Bills (recurring charges such as a phone plan, car insurance or rent)
+Any authenticated family member can read; children only ever see their own bills (other bills return 404, and `childId` is ignored for them). Mutations are parent only (403 for children).
+
+| Method | Route | Body | Response |
+|---|---|---|---|
+| POST | `/api/v1/bills` | `BillInput` | 201 `BillDetailDto` (parent; notifies child: `billCreated`) |
+| GET | `/api/v1/bills?status=active&childId=` | — | `[BillSummaryDto]` (`status` = `active` \| `ended`; filters optional) |
+| GET | `/api/v1/bills/{billId}` | — | `BillDetailDto` |
+| PATCH | `/api/v1/bills/{billId}` | `{ title?, amount?, sendReminders?, sendReceipts? }` | `BillDetailDto` (parent; `amount` requires an active bill, else 409, and only reprices charges not yet due) |
+| POST | `/api/v1/bills/{billId}/end` | — | `BillDetailDto` (parent; 409 if already ended) |
+| POST | `/api/v1/bills/{billId}/payments` | `{ amount, paidOn, note? }` | 201 `BillPaymentDto` (parent; 409 if amount exceeds everything generated so far, including the next upcoming charge; sends receipt if enabled) |
+| GET | `/api/v1/bills/{billId}/payments` | — | `[BillPaymentDto]` |
+| POST | `/api/v1/bills/{billId}/late-fees/{lateFeeId}/waive` | — | `BillDetailDto` (parent; idempotent) |
+
 ### Child (child only, own loans only)
 | Method | Route | Response |
 |---|---|---|
@@ -149,10 +199,10 @@ These routes exist **only** when `ASPNETCORE_ENVIRONMENT=Development` **and** `T
 | POST | `/api/v1/testing/sweep` | — | 204: runs the reminder / late-fee sweep (normally the hourly background job) for the caller's family now. |
 
 ## Business rules (authoritative)
-1. **Amortization**: periods per year = 52 (weekly), 26 (biweekly), 12 (monthly). r = annualRate / periodsPerYear.
+1. **Amortization**: periods per year = 52 (weekly), 26 (biweekly), 12 (monthly), 4 (quarterly), 1 (yearly). r = annualRate / periodsPerYear.
    Payment = P·r / (1 − (1+r)^−n), or P/n when r = 0 or interest disabled. Round payment to cents (MidpointRounding.AwayFromZero).
    For each installment: interest = round(balance·r, 2); principal = payment − interest; final installment's principal = remaining balance (absorbs rounding), amountDue = principal + interest.
-2. **Due dates**: seq 1 = firstDueDate; weekly +7d·k, biweekly +14d·k, monthly `firstDueDate.AddMonths(k)` (clamps to month end).
+2. **Due dates**: seq 1 = firstDueDate; weekly +7d·k, biweekly +14d·k, monthly `firstDueDate.AddMonths(k)`, quarterly `AddMonths(3k)`, yearly `AddYears(k)` — always offset from `firstDueDate`, clamping to month end (Jan 31 → Feb 28/29 → Mar 31; Feb 29 → Feb 28 in non-leap years).
 3. **Validation**: principal 0.01–1,000,000; installmentCount 1–520; annualRate 0–1; lateFeeFlat ≥ 0; lateFeePercent 0–1; graceDays 0–60; firstDueDate ≥ today (family-local); title 1–100 chars; child must belong to caller's family.
 4. **Installment status** (family-local "today"): `paid` if remaining = 0; else `upcoming` if today < dueDate; `due` if dueDate ≤ today ≤ dueDate + graceDays; `late` otherwise.
 5. **Late fee**: when an installment is `late`, has no fee yet, and the loan has a flat and/or percent fee configured, assess one fee = round(flat + percent × installment remaining, 2) (skip if 0). Once per installment, ever. Waived fees are no longer owed. Notify child (`lateFee`).
@@ -160,10 +210,16 @@ These routes exist **only** when `ASPNETCORE_ENVIRONMENT=Development` **and** `T
 7. **Balance** = Σ installment remaining + Σ outstanding (unpaid, unwaived) late fees. `amountPaid` = Σ payments.
 8. **Reminders**: daily sweep (family-local). For active loans with `sendReminders`, for each unpaid installment with `reminderSentAt == null` and `dueDate − 15 days ≤ today ≤ dueDate`, create a `reminder` notification + push to the child and set `reminderSentAt`.
 9. **Receipts**: when a payment is recorded and `sendReceipts`, create a `receipt` notification + push to the child with amount, allocation summary and remaining balance.
-10. **Multi-tenancy**: every resource is scoped by the caller's `family_id`; cross-family access returns 404. Children can only see their own loans and notifications.
+10. **Multi-tenancy**: every resource is scoped by the caller's `family_id`; cross-family access returns 404. Children can only see their own loans, bills and notifications.
+11. **Bills** are open-ended: they recur on the rule-2 schedule until a parent ends them.
+    - **Charges** are generated lazily and idempotently (on any bill read, on payment, and by the sweep): every charge due by today (family-local) plus the next upcoming one, each priced at the bill's amount at generation time. Unique `(billId, dueDate)` and `(billId, seq)` indexes make concurrent generation safe. A charge's status follows rule 4 with the bill's grace days.
+    - **Amount changes** apply to future charges only: already-due charges keep their amount; generated charges not yet due are repriced (never below what was already paid on them).
+    - **Ending** a bill stops generation. Charges already due remain owed and can still accrue late fees (ending is not forgiveness). An unpaid upcoming charge is removed; a partly prepaid one is closed at the amount paid. Payments and waivers are still allowed on ended bills; reminders stop.
+    - **Late fees** follow rule 5 per charge. **Payments** allocate to outstanding late fees (oldest first), then charges in seq order (including prepaying the next upcoming charge). **Reminders** and **receipts** follow rules 8–9 (reminders for active bills only).
 
 ## Push payload (APNs)
 ```json
 { "aps": { "alert": { "title": "…", "body": "…" }, "sound": "default", "badge": 3 },
   "type": "reminder", "loanId": "uuid", "notificationId": "uuid" }
 ```
+Bill notifications carry `"billId": "uuid"` instead of `loanId`.

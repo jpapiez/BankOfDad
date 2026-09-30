@@ -254,17 +254,21 @@ struct LoanDetailView: View {
 }
 
 struct RecordPaymentSheet: View {
-    let detail: LoanDetail
+    let maxAmount: Decimal
     let onSave: @MainActor (Decimal, CalendarDate, String?) async -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var amount: String
     @State private var paidOn = Date()
     @State private var note = ""
 
-    init(detail: LoanDetail, onSave: @escaping @MainActor (Decimal, CalendarDate, String?) async -> Void) {
-        self.detail = detail
+    init(defaultAmount: Decimal, maxAmount: Decimal, onSave: @escaping @MainActor (Decimal, CalendarDate, String?) async -> Void) {
+        self.maxAmount = maxAmount
         self.onSave = onSave
-        _amount = State(initialValue: NSDecimalNumber(decimal: detail.nextAmountDue ?? detail.balance).stringValue)
+        _amount = State(initialValue: NSDecimalNumber(decimal: defaultAmount).stringValue)
+    }
+
+    init(detail: LoanDetail, onSave: @escaping @MainActor (Decimal, CalendarDate, String?) async -> Void) {
+        self.init(defaultAmount: detail.nextAmountDue ?? detail.balance, maxAmount: detail.balance, onSave: onSave)
     }
 
     var body: some View {
@@ -276,14 +280,14 @@ struct RecordPaymentSheet: View {
                     .accessibilityIdentifier("payment.paidOn")
                 TextField("Note", text: $note, axis: .vertical)
                     .accessibilityIdentifier("payment.note")
-                if FormValues.decimal(amount) > detail.balance { ErrorBanner(message: "Payment cannot exceed the remaining balance.") }
+                if FormValues.decimal(amount) > maxAmount { ErrorBanner(message: "Payment cannot exceed the remaining balance.") }
             }
             .navigationTitle("Record payment")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() }.accessibilityIdentifier("payment.cancel") }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") { Task { await onSave(FormValues.decimal(amount), CalendarDate(paidOn), note); dismiss() } }
-                        .disabled(FormValues.decimal(amount) <= 0 || FormValues.decimal(amount) > detail.balance)
+                        .disabled(FormValues.decimal(amount) <= 0 || FormValues.decimal(amount) > maxAmount)
                         .accessibilityIdentifier("payment.save")
                 }
             }

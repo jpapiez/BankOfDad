@@ -159,6 +159,89 @@ public class PaymentAllocation
     public decimal Amount { get; set; }
 }
 
+/// <summary>A recurring, open-ended charge (cell phone, insurance, rent) a child owes every period until a parent ends it.</summary>
+public class Bill
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid FamilyId { get; set; }
+    public Family? Family { get; set; }
+    public Guid ChildId { get; set; }
+    public User? Child { get; set; }
+    public Guid CreatedByParentId { get; set; }
+    public User? CreatedByParent { get; set; }
+    public string Title { get; set; } = string.Empty;
+    /// <summary>The amount of each newly generated charge. Changing it never touches charges that are already due.</summary>
+    public decimal Amount { get; set; }
+    public Frequency Frequency { get; set; }
+    public DateOnly FirstDueDate { get; set; }
+    public BillStatus Status { get; set; } = BillStatus.Active;
+    public bool SendReminders { get; set; } = true;
+    public bool SendReceipts { get; set; } = true;
+    public decimal? LateFeeFlat { get; set; }
+    public decimal? LateFeePercent { get; set; }
+    public int LateFeeGraceDays { get; set; }
+    public DateTimeOffset CreatedAt { get; set; }
+    public DateTimeOffset? EndedAt { get; set; }
+    public Guid ConcurrencyToken { get; set; } = Guid.NewGuid();
+    public List<BillCharge> Charges { get; set; } = [];
+    public List<BillLateFee> LateFees { get; set; } = [];
+    public List<BillPayment> Payments { get; set; } = [];
+}
+
+public class BillCharge
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid BillId { get; set; }
+    public Bill? Bill { get; set; }
+    public int Seq { get; set; }
+    public DateOnly DueDate { get; set; }
+    public decimal Amount { get; set; }
+    public decimal AmountPaid { get; set; }
+    public DateTimeOffset? ReminderSentAt { get; set; }
+}
+
+public class BillLateFee
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid BillId { get; set; }
+    public Bill? Bill { get; set; }
+    public Guid ChargeId { get; set; }
+    public BillCharge? Charge { get; set; }
+    public decimal Amount { get; set; }
+    public decimal AmountPaid { get; set; }
+    public DateTimeOffset AssessedAt { get; set; }
+    public DateTimeOffset? WaivedAt { get; set; }
+    public Guid? WaivedByUserId { get; set; }
+}
+
+public class BillPayment
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid BillId { get; set; }
+    public Bill? Bill { get; set; }
+    public decimal Amount { get; set; }
+    public DateOnly PaidOn { get; set; }
+    public string? Note { get; set; }
+    public Guid RecordedByUserId { get; set; }
+    public User? RecordedByUser { get; set; }
+    public DateTimeOffset CreatedAt { get; set; }
+    public DateTimeOffset? ReceiptSentAt { get; set; }
+    public List<BillPaymentAllocation> Allocations { get; set; } = [];
+}
+
+public class BillPaymentAllocation
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid PaymentId { get; set; }
+    public BillPayment? Payment { get; set; }
+    public AllocationTarget Target { get; set; }
+    public Guid? ChargeId { get; set; }
+    public BillCharge? Charge { get; set; }
+    public Guid? LateFeeId { get; set; }
+    public BillLateFee? LateFee { get; set; }
+    public decimal Amount { get; set; }
+}
+
 public class Notification
 {
     public Guid Id { get; set; } = Guid.NewGuid();
@@ -168,6 +251,7 @@ public class Notification
     public string Title { get; set; } = string.Empty;
     public string Body { get; set; } = string.Empty;
     public Guid? LoanId { get; set; }
+    public Guid? BillId { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset? ReadAt { get; set; }
     public DateTimeOffset? PushedAt { get; set; }
