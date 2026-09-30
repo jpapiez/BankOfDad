@@ -3,7 +3,7 @@ import XCTest
 final class KidModeTests: BankUITestCase {
     private func launchKid(_ auth: AuthTokens) {
         launch(as: auth)
-        XCTAssertTrue(app.tabBars.buttons["My Loans"].waitForExistence(timeout: 15), "Kid tabs did not appear")
+        XCTAssertTrue(app.tabBars.buttons["What I Owe"].waitForExistence(timeout: 15), "Kid tabs did not appear")
     }
 
     func testMyLoansCardsShowProgressNextPaymentAndBalance() throws {
@@ -26,11 +26,29 @@ final class KidModeTests: BankUITestCase {
         XCTAssertTrue(done.label.contains("100%"), done.label)
     }
 
+    func testWhatIOweShowsLoansAndBillsWithTheTotal() throws {
+        let parent = try api.registerParent()
+        let (child, kid) = try api.pairedChild(parent, name: "Xan")
+        let loan = try api.createLoan(parent, childId: child.id, .init(title: "Drone", principal: 150, installmentCount: 3))
+        let bill = try api.createBill(parent, childId: child.id, title: "Music app", amount: 12)
+        let forgiven = try api.createLoan(parent, childId: child.id, .init(title: "Forgiven", principal: 40, installmentCount: 1))
+        try api.cancelLoan(parent, loanId: forgiven.id)
+        launchKid(kid)
+
+        XCTAssertTrue(app.navigationBars["What I owe"].waitForExistence(timeout: 10))
+        element("kidBills.header").waitToAppear()
+        element("kidBill.\(bill.id.uiID)").waitToAppear().waitFor(label: "Music app")
+        element("kidLoans.header").waitToAppear()
+        element("kidLoan.\(loan.id.uiID)").waitToAppear().waitFor(label: "Drone")
+        element("kidOwed.total").waitFor(label: "Total I owe, \(Fmt.money(162))")
+        assertNoErrorBanner()
+    }
+
     func testEmptyState() throws {
         let parent = try api.registerParent()
         let (_, kid) = try api.pairedChild(parent, name: "Bo")
         launchKid(kid)
-        XCTAssertTrue(text("No loans right now").waitForExistence(timeout: 10))
+        XCTAssertTrue(text("Nothing owed right now").waitForExistence(timeout: 10))
     }
 
     func testLoanDetailIsReadOnly() throws {

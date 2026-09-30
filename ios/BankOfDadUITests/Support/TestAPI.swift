@@ -188,6 +188,10 @@ final class TestAPI {
         try decode(BillDetail.self, "GET", "/api/v1/bills/\(billId)", token: token)
     }
 
+    func endBill(_ token: String, _ billId: String) throws {
+        try send("POST", "/api/v1/bills/\(billId)/end", token: token)
+    }
+
     func bills(_ token: String) throws -> [BillSummary] {
         try decode([BillSummary].self, "GET", "/api/v1/bills", token: token)
     }

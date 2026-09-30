@@ -4,7 +4,10 @@ import SwiftUI
 @MainActor
 @Observable
 final class NewBillViewModel {
-    let childId: UUID
+    /// Set when the form is opened for one child (from Child detail); the child picker is then hidden.
+    let fixedChildId: UUID?
+    var childId: UUID?
+    var family: FamilyDto?
     var title = ""
     var amount = ""
     var frequency: Frequency = .monthly
@@ -19,12 +22,18 @@ final class NewBillViewModel {
     var error: String?
     var createdBill: BillDetail?
 
-    init(childId: UUID) { self.childId = childId }
+    init(childId: UUID?) {
+        fixedChildId = childId
+        self.childId = childId
+    }
+
+    var showsChildPicker: Bool { fixedChildId == nil }
+    var selectedChildName: String? { family?.children.first { $0.id == childId }?.displayName }
 
     var input: BillInput? {
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
         let value = FormValues.decimal(amount)
-        guard !trimmed.isEmpty, value > 0 else { return nil }
+        guard let childId, !trimmed.isEmpty, value > 0 else { return nil }
         return BillInput(childId: childId,
                          title: trimmed,
                          amount: value,
@@ -37,6 +46,16 @@ final class NewBillViewModel {
                          sendReceipts: sendReceipts)
     }
 
+    func loadFamily(service: FamilyService) async {
+        guard showsChildPicker, family == nil else { return }
+        do {
+            let value = try await service.family()
+            family = value
+            if childId == nil { childId = value.children.first?.id }
+            error = nil
+        } catch { self.error = error.localizedDescription }
+    }
+
     func create(service: BillService) async {
         guard let input else { return }
         isSaving = true; defer { isSaving = false }
@@ -45,10 +64,11 @@ final class NewBillViewModel {
     }
 }
 
-/// Creates a recurring bill (cell phone, car insurance, rent…) for one child.
+/// Creates a recurring bill (cell phone, car insurance, rent…) for one child. Opened from Child detail the
+/// child is fixed; opened from the Owed tab the parent picks the child.
 @MainActor
 struct NewBillView: View {
-    let childName: String
+    let childName: String?
     let onCreated: @MainActor (BillDetail) -> Void
     @Environment(AppEnvironment.self) private var environment
     @Environment(\.dismiss) private var dismiss
@@ -60,17 +80,37 @@ struct NewBillView: View {
         _viewModel = State(initialValue: NewBillViewModel(childId: childId))
     }
 
+    init(onCreated: @escaping @MainActor (BillDetail) -> Void) {
+        self.childName = nil
+        self.onCreated = onCreated
+        _viewModel = State(initialValue: NewBillViewModel(childId: nil))
+    }
+
+    private var headerName: String? { childName ?? viewModel.selectedChildName }
+
     var body: some View {
         NavigationStack {
             Form {
                 if let error = viewModel.error { ErrorBanner(message: error) }
+                if viewModel.showsChildPicker {
+                    Section {
+                        Picker("Child", selection: $viewModel.childId) {
+                            ForEach(viewModel.family?.children ?? []) { child in Text(child.displayName).tag(Optional(child.id)) }
+                        }
+                        .accessibilityIdentifier("newBill.childPicker")
+                    } header: { Text("Who pays") } footer: {
+                        if let family = viewModel.family, family.children.isEmpty {
+                            Text("Add a child in Family first.")
+                        }
+                    }
+                }
                 Section {
                     TextField("Bill name (e.g. Cell phone)", text: $viewModel.title)
                         .accessibilityIdentifier("newBill.title")
                     TextField("Amount each time", text: $viewModel.amount)
                         .keyboardType(.decimalPad)
                         .accessibilityIdentifier("newBill.amount")
-                } header: { Text("What \(childName) pays") }
+                } header: { Text(headerName.map { "What \($0) pays" } ?? "What they pay") }
                 Section {
                     Picker("Repeats", selection: $viewModel.frequency) {
                         ForEach(Frequency.billSelectable, id: \.self) { Text($0.label).tag($0) }
@@ -108,6 +148,7 @@ struct NewBillView: View {
                         .accessibilityIdentifier("newBill.create")
                 }
             }
+            .task { await viewModel.loadFamily(service: environment.familyService) }
             .onChange(of: viewModel.createdBill?.id) { _, newValue in
                 if newValue != nil, let bill = viewModel.createdBill { onCreated(bill); dismiss() }
             }

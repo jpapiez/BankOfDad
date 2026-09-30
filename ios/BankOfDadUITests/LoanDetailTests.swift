@@ -3,7 +3,7 @@ import XCTest
 final class LoanDetailTests: BankUITestCase {
     private func openLoan(_ loan: LoanDetail, as parent: Parent) {
         launch(as: parent)
-        openTab("Loans")
+        openTab("Owed")
         element("loanRow.\(loan.id.uiID)").waitToAppear().tap()
         XCTAssertTrue(app.navigationBars[loan.title].waitForExistence(timeout: 10))
         element("loanDetail.balance").waitToAppear()

@@ -110,8 +110,8 @@ final class OnboardingTests: BankUITestCase {
         element("pairing.deviceName").replaceText("Riley's iPad")
         join.tap()
 
-        XCTAssertTrue(app.tabBars.buttons["My Loans"].waitForExistence(timeout: 15))
-        XCTAssertTrue(text("No loans right now").waitForExistence(timeout: 10))
+        XCTAssertTrue(app.tabBars.buttons["What I Owe"].waitForExistence(timeout: 15))
+        XCTAssertTrue(text("Nothing owed right now").waitForExistence(timeout: 10))
         openTab("Settings")
         element("kidSettings.name").waitFor(label: "Riley")
         XCTAssertEqual(try api.family(parent).children.first?.pairedDeviceCount, 1)
@@ -123,7 +123,7 @@ final class OnboardingTests: BankUITestCase {
         element("pairing.code").replaceText("ZZZZZZZZ")
         element("pairing.join").tap()
         element("errorBanner").waitToAppear().waitFor(label: "Error")
-        XCTAssertFalse(app.tabBars.buttons["My Loans"].exists)
+        XCTAssertFalse(app.tabBars.buttons["What I Owe"].exists)
     }
 
     func testPairingDeepLinkWhileOnPairingScreen() throws {
@@ -140,7 +140,7 @@ final class OnboardingTests: BankUITestCase {
         let confirm = springboard.buttons["Open"]
         if confirm.waitForExistence(timeout: 3) { confirm.tap() }
 
-        XCTAssertTrue(app.tabBars.buttons["My Loans"].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.tabBars.buttons["What I Owe"].waitForExistence(timeout: 15))
     }
 
     func testPairingDeepLinkFromWelcomeScreen() throws {
@@ -153,6 +153,6 @@ final class OnboardingTests: BankUITestCase {
         // Launches the app from the link, like scanning the parent's QR code with the Camera app.
         app.open(URL(string: code.qrPayload)!)
 
-        XCTAssertTrue(app.tabBars.buttons["My Loans"].waitForExistence(timeout: 15), "Opening a pairing link from the Welcome screen should pair the device")
+        XCTAssertTrue(app.tabBars.buttons["What I Owe"].waitForExistence(timeout: 15), "Opening a pairing link from the Welcome screen should pair the device")
     }
 }
