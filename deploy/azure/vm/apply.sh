@@ -33,6 +33,13 @@ fi
 (umask 077; cat "$app/settings.env" "$app/secrets.env" > "$app/.env")
 
 # The API container runs as the .NET image's non-root user (uid 1654).
+if [[ -f $src/SignInWithAppleKey.p8 ]]; then
+  install -m 0400 -o 1654 -g 1654 "$src/SignInWithAppleKey.p8" "$app/secrets/SignInWithAppleKey.p8"
+fi
+[[ -s $app/secrets/SignInWithAppleKey.p8 ]] || {
+  echo "Sign in with Apple key is missing; set APPLE_KEY_FILE on the first update." >&2
+  exit 1
+}
 if [[ -f $src/AuthKey.p8 ]]; then
   install -m 0400 -o 1654 -g 1654 "$src/AuthKey.p8" "$app/secrets/AuthKey.p8"
 fi

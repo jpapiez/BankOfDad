@@ -102,10 +102,11 @@ Then [point the app at that URL](../README.md#3-point-the-app-at-the-server).
 | `TS_EXTRA_ARGS` | | For example `--advertise-tags=tag:bankofdad`. |
 | `BANKOFDAD_IMAGE` | `ghcr.io/jpapiez/bankofdad-api:latest` | Pin `:sha-<short sha>` to hold a version. |
 | `APPLE_CLIENT_ID`, `APPLE_TEAM_ID`, `APPLE_KEY_ID`, `APPLE_TOKEN_ENCRYPTION_KEY`, `APNS_KEY_ID`, `APNS_TEAM_ID`, `APNS_BUNDLE_ID`, `APNS_USE_SANDBOX` | as in [`.env.example`](../.env.example) | Sign in with Apple token retention/revocation and push notifications. |
+| `APPLE_KEY_FILE` | | Local path to your Sign in with Apple `SignInWithAppleKey.p8`. Required on the first deploy; later updates keep the key already on the VM. |
 | `APNS_KEY_FILE` | | Local path to your APNs `AuthKey.p8`. It's copied to the VM. |
 | `GHCR_USER`, `GHCR_TOKEN` | | Only needed if `BANKOFDAD_IMAGE` points at a private registry image (a token with `read:packages`). The default image is public. |
 
-`update.sh` rewrites the settings on every run, so always run it with your full set of variables. The exceptions are `TS_AUTHKEY`, which is only needed once, and `APNS_KEY_FILE`: the key already on the VM is kept.
+`update.sh` rewrites the settings on every run, so always run it with your full set of variables. The exceptions are `TS_AUTHKEY`, which is only needed once, and the key-file variables: existing Sign in with Apple and APNs keys on the VM are kept when `APPLE_KEY_FILE` or `APNS_KEY_FILE` is omitted.
 
 ## Update
 
@@ -154,7 +155,7 @@ See also the [home-server troubleshooting](../README.md#troubleshooting).
 Keep your subscription, resource group and Tailscale settings in a **private** repository. That repository runs `deploy.sh` or `update.sh` from a pinned BankOfDad ref using GitHub Actions and [OpenID Connect](https://learn.microsoft.com/azure/developer/github/connect-from-azure-openid-connect), so no Azure secret is stored:
 
 1. Create a user-assigned managed identity. Add a federated credential for your deployment repo's `production` environment. Grant the identity **Owner** on the resource group (needed for the backup role assignment).
-2. In the deployment repo, set these Actions variables: `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`, the settings above, and `BANKOFDAD_REF`. Store `TS_AUTHKEY` and any APNs key as environment secrets.
+2. In the deployment repo, set these Actions variables: `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`, the settings above, and `BANKOFDAD_REF`. Store `TS_AUTHKEY`, `APPLE_TOKEN_ENCRYPTION_KEY`, and the Apple private keys as environment secrets.
 3. The workflow checks out `jpapiez/BankOfDad` at `BANKOFDAD_REF`, runs `azure/login` with `id-token: write`, then runs `deploy/azure/deploy.sh` (or `update.sh`).
 
 ## Tear down
