@@ -23,8 +23,20 @@ public class User
     public string? NormalizedEmail { get; set; }
     public string? PasswordHash { get; set; }
     public string? AppleSubject { get; set; }
+    public DateTimeOffset? AppleDeletionStartedAt { get; set; }
     public string? AvatarColor { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
+}
+
+public class AppleRefreshToken
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid UserId { get; set; }
+    public User? User { get; set; }
+    public string TokenEncrypted { get; set; } = string.Empty;
+    public DateTimeOffset CreatedAt { get; set; }
+    public DateTimeOffset? RevokedAt { get; set; }
+    public Guid? ReplacedByTokenId { get; set; }
 }
 
 public class FamilyInvite

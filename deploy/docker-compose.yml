@@ -63,13 +63,17 @@ services:
       ConnectionStrings__Default: "Host=db;Port=5432;Database=${POSTGRES_DB:-bankofdad};Username=${POSTGRES_USER:-bankofdad};Password=${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in deploy/.env}"
       Jwt__SigningKey: ${JWT_SIGNING_KEY:?Set JWT_SIGNING_KEY (32+ chars) in deploy/.env}
       Apple__ClientId: ${APPLE_CLIENT_ID:-com.example.bankofdad}
+      Apple__TeamId: ${APPLE_TEAM_ID:?Set APPLE_TEAM_ID in deploy/.env}
+      Apple__KeyId: ${APPLE_KEY_ID:?Set APPLE_KEY_ID in deploy/.env}
+      Apple__KeyPath: /run/secrets/apple/SignInWithAppleKey.p8
+      Apple__TokenEncryptionKey: ${APPLE_TOKEN_ENCRYPTION_KEY:?Set APPLE_TOKEN_ENCRYPTION_KEY in deploy/.env}
       Apns__KeyId: ${APNS_KEY_ID:-}
       Apns__TeamId: ${APNS_TEAM_ID:-}
       Apns__BundleId: ${APNS_BUNDLE_ID:-com.example.bankofdad}
       Apns__UseSandbox: ${APNS_USE_SANDBOX:-true}
-      Apns__KeyPath: /run/secrets/apns/AuthKey.p8
+      Apns__KeyPath: /run/secrets/apple/AuthKey.p8
     volumes:
-      - ./secrets:/run/secrets/apns:ro
+      - ./secrets:/run/secrets/apple:ro
 
 volumes:
   pgdata:

@@ -83,6 +83,11 @@ final class APIClient: @unchecked Sendable {
         let _: EmptyResponse = try await send(APIEndpoint<EmptyResponse>(method: "DELETE", path: path))
     }
 
+    func deleteAccount() async throws {
+        let endpoint = APIEndpoint<EmptyResponse>(method: "DELETE", path: "/account")
+        let _: EmptyResponse = try await perform(endpoint, retryingAfterRefresh: true)
+    }
+
     func sendNoResponse(_ method: String, path: String, requiresAuth: Bool = true) async throws {
         let endpoint = APIEndpoint<EmptyResponse>(method: method, path: path, requiresAuth: requiresAuth)
         let _: EmptyResponse = try await send(endpoint)

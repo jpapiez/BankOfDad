@@ -44,7 +44,7 @@ Backend layout (`backend/`):
 Prerequisites: Docker Desktop (and the .NET 10 SDK if you want to build/test outside Docker).
 
 ```powershell
-Copy-Item .env.example .env   # then edit secrets (JWT_SIGNING_KEY, POSTGRES_PASSWORD, APPLE_CLIENT_ID, ...)
+Copy-Item .env.example .env   # then edit database/JWT and Sign in with Apple settings
 docker compose up -d --build
 curl http://localhost:8080/health   # -> Healthy
 ```
@@ -88,7 +88,7 @@ See [`ios/README.md`](ios/README.md) for pointing the app at your backend (`API_
 
 Apple setup checklist:
 
-1. Set `BANKOFDAD_BUNDLE_ID` and `DEVELOPMENT_TEAM` in `ios/Config/Local.xcconfig` (copy `Local.xcconfig.example`). Use the same bundle ID for `APPLE_CLIENT_ID` and `APNS_BUNDLE_ID` on the server.
+1. Set `BANKOFDAD_BUNDLE_ID` and `DEVELOPMENT_TEAM` in `ios/Config/Local.xcconfig` (copy `Local.xcconfig.example`). Use the same bundle ID for `APPLE_CLIENT_ID` and `APNS_BUNDLE_ID` on the server. Configure the remaining `APPLE_*` server settings from `.env.example`; they are required to retain an encrypted Apple refresh token and revoke it during account deletion.
 2. Enable the **Sign in with Apple** and **Push Notifications** capabilities for the app ID.
 3. Create an APNs auth key (`.p8`) if you want real push notifications.
 4. To put the app on family phones, see [Install on family devices](ios/README.md#install-on-family-devices-testflight).

@@ -1,3 +1,4 @@
+using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Data;
 using System.Net.Sockets;
@@ -58,7 +59,9 @@ builder.Services.AddScoped<BillSweeper>();
 builder.Services.AddSingleton<IClock, SystemClock>();
 builder.Services.AddScoped<IPasswordService, PasswordService>();
 builder.Services.AddScoped<IAppleTokenValidator, AppleTokenValidator>();
+builder.Services.AddHttpClient<IAppleAuthorizationService, AppleAuthorizationService>();
 builder.Services.AddScoped<AuthService>();
+builder.Services.AddScoped<AccountDeletionService>();
 builder.Services.AddScoped<NotificationService>();
 builder.Services.AddScoped<LoanSweeper>();
 if (string.IsNullOrWhiteSpace(builder.Configuration["Apns:KeyId"]))
@@ -88,6 +91,24 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJw
         RoleClaimType = "role",
         NameClaimType = "name"
     };
+    options.Events = new JwtBearerEvents
+    {
+        OnTokenValidated = async context =>
+        {
+            var subject = context.Principal?.FindFirstValue(JwtRegisteredClaimNames.Sub);
+            if (!Guid.TryParse(subject, out var userId))
+            {
+                context.Fail("Invalid subject claim.");
+                return;
+            }
+
+            var db = context.HttpContext.RequestServices.GetRequiredService<BankOfDadDbContext>();
+            if (!await db.Users.AnyAsync(x => x.Id == userId, context.HttpContext.RequestAborted).ConfigureAwait(false))
+            {
+                context.Fail("Account no longer exists.");
+            }
+        }
+    };
 });
 builder.Services.AddAuthorization(options =>
 {
@@ -103,13 +124,17 @@ var app = builder.Build();
 app.UseExceptionHandler(errorApp => errorApp.Run(async context =>
 {
     var ex = context.Features.Get<IExceptionHandlerFeature>()?.Error;
-    var api = ex switch
+    var postgresException = ex as PostgresException ?? ex?.GetBaseException() as PostgresException;
+    var isDatabaseConflict = postgresException?.SqlState is
+        PostgresErrorCodes.UniqueViolation or
+        PostgresErrorCodes.SerializationFailure or
+        PostgresErrorCodes.DeadlockDetected or
+        PostgresErrorCodes.LockNotAvailable;
+    var api = isDatabaseConflict ? new ApiException(409, "This was changed by someone else. Please retry.") : ex switch
     {
         ApiException apiException => apiException,
         BadHttpRequestException badRequest => new ApiException(badRequest.StatusCode, "Invalid request.", badRequest.Message),
         DbUpdateConcurrencyException => new ApiException(409, "This was changed by someone else. Please retry."),
-        PostgresException { SqlState: PostgresErrorCodes.SerializationFailure or PostgresErrorCodes.DeadlockDetected } => new ApiException(409, "This was changed by someone else. Please retry."),
-        DbUpdateException { InnerException: PostgresException { SqlState: PostgresErrorCodes.SerializationFailure or PostgresErrorCodes.DeadlockDetected } } => new ApiException(409, "This was changed by someone else. Please retry."),
         _ => null
     };
     var status = api?.Status ?? StatusCodes.Status500InternalServerError;
@@ -189,44 +214,94 @@ auth.MapPost("/accept-invite", async (AcceptInviteRequest request, BankOfDadDbCo
     return Results.Created("/api/v1/auth/me", await authService.IssueAsync(user, null, ct));
 });
 
-auth.MapPost("/apple", async (AppleRequest request, BankOfDadDbContext db, AuthService authService, IAppleTokenValidator apple, IClock clock, CancellationToken ct) =>
+auth.MapPost("/apple", async (AppleRequest request, BankOfDadDbContext db, AuthService authService, IAppleTokenValidator apple, IAppleAuthorizationService appleAuthorization, IClock clock, CancellationToken ct) =>
 {
+    using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
     var appleUser = await apple.ValidateAsync(request.IdentityToken, ct);
-    var existing = await db.Users.SingleOrDefaultAsync(x => x.AppleSubject == appleUser.Subject, ct);
-    if (existing is not null) return Results.Ok(await authService.IssueAsync(existing, null, ct));
+
+    var existing = await db.Users
+        .FromSqlRaw("SELECT * FROM \"Users\" WHERE \"AppleSubject\" = {0} FOR UPDATE NOWAIT", appleUser.Subject)
+        .SingleOrDefaultAsync(ct);
+    if (existing is not null)
+    {
+        if (existing.AppleDeletionStartedAt is not null)
+        {
+            throw new ApiException(409, "This account is already being deleted.");
+        }
+
+        var replacementToken = await ExchangeAppleCode(request.AuthorizationCode, appleUser.Subject, appleAuthorization, ct);
+        var previousToken = await db.AppleRefreshTokens
+            .SingleOrDefaultAsync(x => x.UserId == existing.Id && x.RevokedAt == null && x.ReplacedByTokenId == null, ct);
+
+        var token = new AppleRefreshToken
+        {
+            UserId = existing.Id,
+            TokenEncrypted = replacementToken,
+            CreatedAt = clock.UtcNow,
+        };
+        if (previousToken is not null)
+        {
+            previousToken.ReplacedByTokenId = token.Id;
+        }
+        db.AppleRefreshTokens.Add(token);
+        await db.SaveChangesAsync(ct);
+        var existingAuthResponse = await authService.IssueAsync(existing, null, ct);
+        await transaction.CommitAsync(ct);
+        return Results.Ok(existingAuthResponse);
+    }
     if (appleUser.Email is not null)
     {
         // Apple only issues verified emails, so link to an existing email/password parent account.
         var normalized = NormalizeEmail(appleUser.Email);
-        var byEmail = await db.Users.SingleOrDefaultAsync(x => x.NormalizedEmail == normalized, ct);
+        var byEmail = await db.Users
+            .FromSqlRaw("SELECT * FROM \"Users\" WHERE \"NormalizedEmail\" = {0} FOR UPDATE NOWAIT", normalized)
+            .SingleOrDefaultAsync(ct);
         if (byEmail is not null)
         {
             if (byEmail.AppleSubject is not null) throw new ApiException(409, "This email is linked to a different Apple ID.");
+            if (byEmail.AppleDeletionStartedAt is not null) throw new ApiException(409, "This account is already being deleted.");
+
+            var replacementToken = await ExchangeAppleCode(request.AuthorizationCode, appleUser.Subject, appleAuthorization, ct);
             byEmail.AppleSubject = appleUser.Subject;
+            var token = new AppleRefreshToken
+            {
+                UserId = byEmail.Id,
+                TokenEncrypted = replacementToken,
+                CreatedAt = clock.UtcNow,
+            };
+            db.AppleRefreshTokens.Add(token);
             await db.SaveChangesAsync(ct);
-            return Results.Ok(await authService.IssueAsync(byEmail, null, ct));
+            var linkedAuthResponse = await authService.IssueAsync(byEmail, null, ct);
+            await transaction.CommitAsync(ct);
+            return Results.Ok(linkedAuthResponse);
         }
     }
     Guid familyId;
+    FamilyInvite? acceptedInvite = null;
+    Family? newFamily = null;
     if (!string.IsNullOrWhiteSpace(request.InviteCode))
     {
-        var invite = await db.FamilyInvites.SingleOrDefaultAsync(x => x.CodeHash == SecretHasher.Sha256(CodeGenerator.NormalizeCode(request.InviteCode)), ct);
-        if (invite is null || invite.UsedAt is not null || invite.ExpiresAt <= clock.UtcNow) throw new ApiException(401, "Invalid invite code.");
-        invite.UsedAt = clock.UtcNow;
-        familyId = invite.FamilyId;
+        acceptedInvite = await db.FamilyInvites.SingleOrDefaultAsync(x => x.CodeHash == SecretHasher.Sha256(CodeGenerator.NormalizeCode(request.InviteCode)), ct);
+        if (acceptedInvite is null || acceptedInvite.UsedAt is not null || acceptedInvite.ExpiresAt <= clock.UtcNow) throw new ApiException(401, "Invalid invite code.");
+        familyId = acceptedInvite.FamilyId;
     }
     else
     {
         var tz = request.TimeZone ?? "America/Los_Angeles";
         ValidateTimeZone(tz);
-        var family = new Family { Name = request.FamilyName ?? "Family", TimeZone = tz, CreatedAt = clock.UtcNow };
-        db.Families.Add(family);
-        familyId = family.Id;
+        newFamily = new Family { Name = request.FamilyName ?? "Family", TimeZone = tz, CreatedAt = clock.UtcNow };
+        familyId = newFamily.Id;
     }
+    var encryptedRefreshToken = await ExchangeAppleCode(request.AuthorizationCode, appleUser.Subject, appleAuthorization, ct);
+    if (acceptedInvite is not null) acceptedInvite.UsedAt = clock.UtcNow;
+    if (newFamily is not null) db.Families.Add(newFamily);
     var user = new User { FamilyId = familyId, Role = Role.Parent, DisplayName = request.DisplayName ?? appleUser.Email ?? "Parent", Email = appleUser.Email, NormalizedEmail = appleUser.Email is null ? null : NormalizeEmail(appleUser.Email), AppleSubject = appleUser.Subject, CreatedAt = clock.UtcNow };
     db.Users.Add(user);
+    db.AppleRefreshTokens.Add(new AppleRefreshToken { UserId = user.Id, TokenEncrypted = encryptedRefreshToken, CreatedAt = clock.UtcNow });
     await db.SaveChangesAsync(ct);
-    return Results.Created("/api/v1/auth/me", await authService.IssueAsync(user, null, ct));
+    var createdAuthResponse = await authService.IssueAsync(user, null, ct);
+    await transaction.CommitAsync(ct);
+    return Results.Created("/api/v1/auth/me", createdAuthResponse);
 });
 
 auth.MapGet("/me", async (ClaimsPrincipal user, BankOfDadDbContext db, CancellationToken ct) =>
@@ -234,6 +309,12 @@ auth.MapGet("/me", async (ClaimsPrincipal user, BankOfDadDbContext db, Cancellat
     var current = await db.Users.FindAsync([user.UserId()], ct);
     return current is null ? Results.NotFound() : Results.Ok(DtoMapper.User(current));
 }).RequireAuthorization();
+
+api.MapDelete("/account", async (ClaimsPrincipal user, AccountDeletionService deletion, CancellationToken ct) =>
+{
+    await deletion.DeleteParentAsync(user.UserId(), ct);
+    return Results.NoContent();
+}).RequireAuthorization("Parent");
 
 var familyGroup = api.MapGroup("/family").RequireAuthorization("Parent");
 familyGroup.MapGet("/", async (ClaimsPrincipal user, BankOfDadDbContext db, IClock clock, CancellationToken ct) => Results.Ok(await GetFamilyDto(user.FamilyId(), db, clock, ct)));
@@ -549,6 +630,19 @@ static DateOnly TodayFor(string timeZone, IClock clock)
 }
 
 static async Task<string> GetFamilyTimeZone(Guid familyId, BankOfDadDbContext db, CancellationToken ct) => (await db.Families.FindAsync([familyId], ct) ?? throw new ApiException(404, "Family not found.")).TimeZone;
+
+static async Task<string> ExchangeAppleCode(string authorizationCode, string expectedSubject, IAppleAuthorizationService appleAuthorization, CancellationToken ct)
+{
+    if (string.IsNullOrWhiteSpace(authorizationCode)) throw new ApiException(400, "Apple authorization code is required.");
+    try
+    {
+        return await appleAuthorization.ExchangeCodeAsync(authorizationCode, expectedSubject, ct);
+    }
+    catch (AppleAuthorizationException)
+    {
+        throw new ApiException(503, "Sign in with Apple could not be completed.", "Apple authorization could not be securely retained. Please try again.");
+    }
+}
 
 static async Task<FamilyDto> GetFamilyDto(Guid familyId, BankOfDadDbContext db, IClock clock, CancellationToken ct)
 {

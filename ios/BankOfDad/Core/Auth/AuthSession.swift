@@ -56,9 +56,9 @@ final class AuthSession {
         }
     }
 
-    func signInWithApple(identityToken: String, displayName: String?, familyName: String?, timeZone: String?, inviteCode: String?) async {
+    func signInWithApple(identityToken: String, authorizationCode: String, displayName: String?, familyName: String?, timeZone: String?, inviteCode: String?) async {
         await authenticate {
-            try await self.apiClient.post("/auth/apple", body: AppleAuthRequest(identityToken: identityToken, displayName: displayName, familyName: familyName, timeZone: timeZone, inviteCode: inviteCode.map(PairingCode.normalized)), requiresAuth: false)
+            try await self.apiClient.post("/auth/apple", body: AppleAuthRequest(identityToken: identityToken, authorizationCode: authorizationCode, displayName: displayName, familyName: familyName, timeZone: timeZone, inviteCode: inviteCode.map(PairingCode.normalized)), requiresAuth: false)
         }
     }
 
@@ -80,6 +80,11 @@ final class AuthSession {
         if let refresh {
             try? await apiClient.sendNoResponse("POST", path: "/auth/logout", body: LogoutRequest(refreshToken: refresh), requiresAuth: false)
         }
+        await signOutLocal()
+    }
+
+    func deleteAccount() async throws {
+        try await apiClient.deleteAccount()
         await signOutLocal()
     }
 
@@ -111,7 +116,7 @@ final class AuthSession {
 
 struct RegisterRequest: Encodable { let email: String; let password: String; let displayName: String; let familyName: String; let timeZone: String }
 struct LoginRequest: Encodable { let email: String; let password: String }
-struct AppleAuthRequest: Encodable { let identityToken: String; let displayName: String?; let familyName: String?; let timeZone: String?; let inviteCode: String? }
+struct AppleAuthRequest: Encodable { let identityToken: String; let authorizationCode: String; let displayName: String?; let familyName: String?; let timeZone: String?; let inviteCode: String? }
 struct PairRequest: Encodable { let code: String; let deviceName: String }
 struct AcceptInviteRequest: Encodable { let inviteCode: String; let email: String; let password: String; let displayName: String }
 struct LogoutRequest: Encodable { let refreshToken: String }

@@ -58,4 +58,19 @@ final class SettingsTests: BankUITestCase {
         launch(resetKeychain: false)
         element("welcome.parent").waitToAppear(timeout: 15)
     }
+
+    func testDeleteAccountRequiresConfirmationAndSignsOutAfterSuccess() throws {
+        let parent = try api.registerParent()
+        openSettings(parent)
+
+        scrollTo(element("settings.deleteAccount")).tap()
+        XCTAssertTrue(app.buttons["Delete My Account"].waitForExistence(timeout: 5))
+        app.buttons["Cancel"].tap()
+        XCTAssertTrue(element("settings.deleteAccount").waitForExistence(timeout: 5))
+
+        scrollTo(element("settings.deleteAccount")).tap()
+        app.buttons["Delete My Account"].tap()
+        element("welcome.parent").waitToAppear(timeout: 15)
+        XCTAssertEqual(api.refreshStatus(parent.auth.refreshToken), 401)
+    }
 }

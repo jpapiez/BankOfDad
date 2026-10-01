@@ -42,6 +42,22 @@ final class APIClientTests: XCTestCase {
         let access = await vault.tokens().access
         XCTAssertEqual(access, "new")
     }
+
+    func testDeleteAccountUsesAuthenticatedAccountEndpoint() async throws {
+        let vault = TokenVault()
+        await vault.update(accessToken: "access", refreshToken: "refresh")
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [StubURLProtocol.self]
+        let session = URLSession(configuration: configuration)
+        let client = APIClient(baseURL: URL(string: "http://localhost:8080")!, vault: vault, urlSession: session)
+        StubURLProtocol.handler = { request in
+            XCTAssertEqual(request.httpMethod, "DELETE")
+            XCTAssertEqual(request.url?.path, "/api/v1/account")
+            return (HTTPURLResponse(url: request.url!, statusCode: 204, httpVersion: nil, headerFields: nil)!, Data())
+        }
+
+        try await client.deleteAccount()
+    }
 }
 
 final class StubURLProtocol: URLProtocol {
