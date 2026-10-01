@@ -64,7 +64,6 @@ public sealed class BankOfDadDbContext(DbContextOptions<BankOfDadDbContext> opti
             b.Property(x => x.Email).HasMaxLength(320);
             b.Property(x => x.NormalizedEmail).HasMaxLength(320);
             b.Property(x => x.AppleSubject).HasMaxLength(200);
-            b.Property(x => x.AppleRefreshTokenEncrypted).HasMaxLength(2048);
             b.Property(x => x.AppleDeletionStartedAt);
             b.Property(x => x.AvatarColor).HasMaxLength(20);
             b.HasIndex(x => x.NormalizedEmail).IsUnique().HasFilter("\"NormalizedEmail\" IS NOT NULL");
@@ -76,7 +75,6 @@ public sealed class BankOfDadDbContext(DbContextOptions<BankOfDadDbContext> opti
         {
             b.Property(x => x.TokenEncrypted).HasMaxLength(2048).IsRequired();
             b.HasIndex(x => new { x.UserId, x.RevokedAt }).HasDatabaseName("IX_AppleRefreshTokens_UserId_RevokedAt");
-            b.HasIndex(x => x.UserId);
         });
 
         modelBuilder.Entity<FamilyInvite>(b =>

@@ -124,13 +124,17 @@ var app = builder.Build();
 app.UseExceptionHandler(errorApp => errorApp.Run(async context =>
 {
     var ex = context.Features.Get<IExceptionHandlerFeature>()?.Error;
-    var api = ex switch
+    var postgresException = ex as PostgresException ?? ex?.GetBaseException() as PostgresException;
+    var isDatabaseConflict = postgresException?.SqlState is
+        PostgresErrorCodes.UniqueViolation or
+        PostgresErrorCodes.SerializationFailure or
+        PostgresErrorCodes.DeadlockDetected or
+        PostgresErrorCodes.LockNotAvailable;
+    var api = isDatabaseConflict ? new ApiException(409, "This was changed by someone else. Please retry.") : ex switch
     {
         ApiException apiException => apiException,
         BadHttpRequestException badRequest => new ApiException(badRequest.StatusCode, "Invalid request.", badRequest.Message),
         DbUpdateConcurrencyException => new ApiException(409, "This was changed by someone else. Please retry."),
-        PostgresException { SqlState: PostgresErrorCodes.UniqueViolation or PostgresErrorCodes.SerializationFailure or PostgresErrorCodes.DeadlockDetected } => new ApiException(409, "This was changed by someone else. Please retry."),
-        DbUpdateException { InnerException: PostgresException { SqlState: PostgresErrorCodes.UniqueViolation or PostgresErrorCodes.SerializationFailure or PostgresErrorCodes.DeadlockDetected } } => new ApiException(409, "This was changed by someone else. Please retry."),
         _ => null
     };
     var status = api?.Status ?? StatusCodes.Status500InternalServerError;
@@ -216,7 +220,7 @@ auth.MapPost("/apple", async (AppleRequest request, BankOfDadDbContext db, AuthS
     var appleUser = await apple.ValidateAsync(request.IdentityToken, ct);
 
     var existing = await db.Users
-        .FromSqlRaw("SELECT * FROM \"Users\" WHERE \"AppleSubject\" = {0} FOR UPDATE", appleUser.Subject)
+        .FromSqlRaw("SELECT * FROM \"Users\" WHERE \"AppleSubject\" = {0} FOR UPDATE NOWAIT", appleUser.Subject)
         .SingleOrDefaultAsync(ct);
     if (existing is not null)
     {
@@ -226,65 +230,50 @@ auth.MapPost("/apple", async (AppleRequest request, BankOfDadDbContext db, AuthS
         }
 
         var replacementToken = await ExchangeAppleCode(request.AuthorizationCode, appleUser.Subject, appleAuthorization, ct);
-        var previousTokens = await db.AppleRefreshTokens
-            .Where(x => x.UserId == existing.Id && x.RevokedAt == null)
-            .OrderBy(x => x.CreatedAt)
-            .ToListAsync(ct);
+        var previousToken = await db.AppleRefreshTokens
+            .SingleOrDefaultAsync(x => x.UserId == existing.Id && x.RevokedAt == null && x.ReplacedByTokenId == null, ct);
 
-        existing.AppleRefreshTokenEncrypted = replacementToken;
         var token = new AppleRefreshToken
         {
             UserId = existing.Id,
             TokenEncrypted = replacementToken,
             CreatedAt = clock.UtcNow,
-            ReplacedByTokenId = previousTokens.Count > 0 ? previousTokens[^1].Id : null,
         };
-        foreach (var previousToken in previousTokens)
+        if (previousToken is not null)
         {
-            if (previousToken.RevokedAt is not null) continue;
-            await appleAuthorization.RevokeAsync(previousToken.TokenEncrypted, ct).ConfigureAwait(false);
-            previousToken.RevokedAt = clock.UtcNow;
+            previousToken.ReplacedByTokenId = token.Id;
         }
         db.AppleRefreshTokens.Add(token);
         await db.SaveChangesAsync(ct);
+        var existingAuthResponse = await authService.IssueAsync(existing, null, ct);
         await transaction.CommitAsync(ct);
-        return Results.Ok(await authService.IssueAsync(existing, null, ct));
+        return Results.Ok(existingAuthResponse);
     }
     if (appleUser.Email is not null)
     {
         // Apple only issues verified emails, so link to an existing email/password parent account.
         var normalized = NormalizeEmail(appleUser.Email);
-        var byEmail = await db.Users.SingleOrDefaultAsync(x => x.NormalizedEmail == normalized, ct);
+        var byEmail = await db.Users
+            .FromSqlRaw("SELECT * FROM \"Users\" WHERE \"NormalizedEmail\" = {0} FOR UPDATE NOWAIT", normalized)
+            .SingleOrDefaultAsync(ct);
         if (byEmail is not null)
         {
             if (byEmail.AppleSubject is not null) throw new ApiException(409, "This email is linked to a different Apple ID.");
             if (byEmail.AppleDeletionStartedAt is not null) throw new ApiException(409, "This account is already being deleted.");
 
             var replacementToken = await ExchangeAppleCode(request.AuthorizationCode, appleUser.Subject, appleAuthorization, ct);
-            var previousTokens = await db.AppleRefreshTokens
-                .Where(x => x.UserId == byEmail.Id && x.RevokedAt == null)
-                .OrderBy(x => x.CreatedAt)
-                .ToListAsync(ct);
-
             byEmail.AppleSubject = appleUser.Subject;
-            byEmail.AppleRefreshTokenEncrypted = replacementToken;
             var token = new AppleRefreshToken
             {
                 UserId = byEmail.Id,
                 TokenEncrypted = replacementToken,
                 CreatedAt = clock.UtcNow,
-                ReplacedByTokenId = previousTokens.Count > 0 ? previousTokens[^1].Id : null,
             };
-            foreach (var previousToken in previousTokens)
-            {
-                if (previousToken.RevokedAt is not null) continue;
-                await appleAuthorization.RevokeAsync(previousToken.TokenEncrypted, ct).ConfigureAwait(false);
-                previousToken.RevokedAt = clock.UtcNow;
-            }
             db.AppleRefreshTokens.Add(token);
             await db.SaveChangesAsync(ct);
+            var linkedAuthResponse = await authService.IssueAsync(byEmail, null, ct);
             await transaction.CommitAsync(ct);
-            return Results.Ok(await authService.IssueAsync(byEmail, null, ct));
+            return Results.Ok(linkedAuthResponse);
         }
     }
     Guid familyId;
@@ -306,12 +295,13 @@ auth.MapPost("/apple", async (AppleRequest request, BankOfDadDbContext db, AuthS
     var encryptedRefreshToken = await ExchangeAppleCode(request.AuthorizationCode, appleUser.Subject, appleAuthorization, ct);
     if (acceptedInvite is not null) acceptedInvite.UsedAt = clock.UtcNow;
     if (newFamily is not null) db.Families.Add(newFamily);
-    var user = new User { FamilyId = familyId, Role = Role.Parent, DisplayName = request.DisplayName ?? appleUser.Email ?? "Parent", Email = appleUser.Email, NormalizedEmail = appleUser.Email is null ? null : NormalizeEmail(appleUser.Email), AppleSubject = appleUser.Subject, AppleRefreshTokenEncrypted = encryptedRefreshToken, CreatedAt = clock.UtcNow };
+    var user = new User { FamilyId = familyId, Role = Role.Parent, DisplayName = request.DisplayName ?? appleUser.Email ?? "Parent", Email = appleUser.Email, NormalizedEmail = appleUser.Email is null ? null : NormalizeEmail(appleUser.Email), AppleSubject = appleUser.Subject, CreatedAt = clock.UtcNow };
     db.Users.Add(user);
     db.AppleRefreshTokens.Add(new AppleRefreshToken { UserId = user.Id, TokenEncrypted = encryptedRefreshToken, CreatedAt = clock.UtcNow });
     await db.SaveChangesAsync(ct);
+    var createdAuthResponse = await authService.IssueAsync(user, null, ct);
     await transaction.CommitAsync(ct);
-    return Results.Created("/api/v1/auth/me", await authService.IssueAsync(user, null, ct));
+    return Results.Created("/api/v1/auth/me", createdAuthResponse);
 });
 
 auth.MapGet("/me", async (ClaimsPrincipal user, BankOfDadDbContext db, CancellationToken ct) =>

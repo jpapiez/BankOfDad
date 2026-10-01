@@ -3,6 +3,7 @@ namespace BankOfDad.Api.Tests;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Collections.Concurrent;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using BankOfDad.Api.Models;
@@ -211,7 +212,7 @@ public sealed class BankOfDadFlowTests : IAsyncLifetime
         using (var scope = _factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<BankOfDadDbContext>();
-            var stored = await db.Users.Where(x => x.Id == apple.User.Id).Select(x => x.AppleRefreshTokenEncrypted).SingleAsync();
+            var stored = await db.AppleRefreshTokens.Where(x => x.UserId == apple.User.Id).Select(x => x.TokenEncrypted).SingleAsync();
             stored.Should().Be("encrypted:delete-code").And.NotContain("refresh-token");
         }
 
@@ -247,46 +248,114 @@ public sealed class BankOfDadFlowTests : IAsyncLifetime
     {
         var first = await Post<AuthResponse>("/api/v1/auth/apple", new AppleRequest("apple-replace", "first-code", "Apple Parent", "Apple Family", "America/Los_Angeles", null), HttpStatusCode.Created);
         var second = await Post<AuthResponse>("/api/v1/auth/apple", new AppleRequest("apple-replace", "second-code", "Apple Parent", "Apple Family", "America/Los_Angeles", null), HttpStatusCode.OK);
-        Use(second.AccessToken);
+        var third = await Post<AuthResponse>("/api/v1/auth/apple", new AppleRequest("apple-replace", "third-code", "Apple Parent", "Apple Family", "America/Los_Angeles", null), HttpStatusCode.OK);
+        third.User.Id.Should().Be(first.User.Id);
+        Use(third.AccessToken);
 
         using (var scope = _factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<BankOfDadDbContext>();
             var tokens = await db.AppleRefreshTokens
-                .Where(x => x.UserId == second.User.Id)
-                .OrderBy(x => x.CreatedAt)
-                .Select(x => new { x.TokenEncrypted, x.RevokedAt, x.ReplacedByTokenId })
+                .Where(x => x.UserId == third.User.Id)
+                .Select(x => new { x.Id, x.TokenEncrypted, x.RevokedAt, x.ReplacedByTokenId })
                 .ToListAsync();
-            tokens.Should().HaveCount(2);
-            tokens[0].TokenEncrypted.Should().Be("encrypted:first-code");
-            tokens[0].RevokedAt.Should().NotBeNull();
-            tokens[0].ReplacedByTokenId.Should().BeNull();
-            tokens[1].TokenEncrypted.Should().Be("encrypted:second-code");
-            tokens[1].RevokedAt.Should().BeNull();
+            tokens.Should().HaveCount(3);
+            var firstToken = tokens.Single(x => x.TokenEncrypted == "encrypted:first-code");
+            var secondToken = tokens.Single(x => x.TokenEncrypted == "encrypted:second-code");
+            var thirdToken = tokens.Single(x => x.TokenEncrypted == "encrypted:third-code");
+            firstToken.RevokedAt.Should().BeNull();
+            secondToken.RevokedAt.Should().BeNull();
+            thirdToken.RevokedAt.Should().BeNull();
+            firstToken.ReplacedByTokenId.Should().Be(secondToken.Id);
+            secondToken.ReplacedByTokenId.Should().Be(thirdToken.Id);
+            thirdToken.ReplacedByTokenId.Should().BeNull();
         }
 
         (await _client.DeleteAsync("/api/v1/account")).StatusCode.Should().Be(HttpStatusCode.NoContent);
-        _appleAuthorizations.RevokedTokens.Should().Contain(new[] { "encrypted:first-code", "encrypted:second-code" });
+        _appleAuthorizations.RevokedTokens.Should().Contain(new[] { "encrypted:first-code", "encrypted:second-code", "encrypted:third-code" });
     }
 
     [Fact]
     public async Task Concurrent_Apple_login_and_delete_do_not_leave_active_refresh_tokens()
     {
         var apple = await Post<AuthResponse>("/api/v1/auth/apple", new AppleRequest("apple-race", "race-code", "Apple Parent", "Apple Family", "America/Los_Angeles", null), HttpStatusCode.Created);
-        Use(apple.AccessToken);
+        _appleAuthorizations.BlockRevocation = true;
 
-        var deleteTask = _client.DeleteAsync("/api/v1/account");
-        var replaceTask = _client.PostAsJsonAsync("/api/v1/auth/apple", new AppleRequest("apple-race", "new-code", "Apple Parent", "Apple Family", "America/Los_Angeles", null), Json);
-        var deleteResponse = await deleteTask;
-        var replaceResponse = await replaceTask;
+        using var deleteClient = _factory.CreateClient();
+        deleteClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apple.AccessToken);
+        var deleteTask = deleteClient.DeleteAsync("/api/v1/account");
+        await _appleAuthorizations.RevocationStarted.Task.WaitAsync(TimeSpan.FromSeconds(10));
 
-        deleteResponse.StatusCode.Should().BeOneOf(HttpStatusCode.NoContent, HttpStatusCode.ServiceUnavailable, HttpStatusCode.Conflict);
-        replaceResponse.StatusCode.Should().BeOneOf(HttpStatusCode.Conflict, HttpStatusCode.OK, HttpStatusCode.InternalServerError);
+        using var loginClient = _factory.CreateClient();
+        var replaceResponse = await loginClient.PostAsJsonAsync(
+            "/api/v1/auth/apple",
+            new AppleRequest("apple-race", "new-code", "Apple Parent", "Apple Family", "America/Los_Angeles", null),
+            Json);
+        replaceResponse.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        _appleAuthorizations.ExchangedCodes.Should().NotContain("new-code");
 
-        using var scope = _factory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<BankOfDadDbContext>();
-        var active = await db.AppleRefreshTokens.Where(x => x.UserId == apple.User.Id && x.RevokedAt == null).ToListAsync();
-        active.Should().BeEmpty();
+        _appleAuthorizations.AllowRevocation.TrySetResult();
+        (await deleteTask).StatusCode.Should().Be(HttpStatusCode.NoContent);
+        _appleAuthorizations.RevokedTokens.Should().Contain("encrypted:race-code");
+    }
+
+    [Fact]
+    public async Task Apple_login_that_locks_first_finishes_before_account_can_be_deleted()
+    {
+        var apple = await Post<AuthResponse>("/api/v1/auth/apple", new AppleRequest("apple-login-first", "initial-code", "Apple Parent", "Apple Family", "America/Los_Angeles", null), HttpStatusCode.Created);
+        _appleAuthorizations.BlockedExchangeCode = "replacement-code";
+
+        using var loginClient = _factory.CreateClient();
+        var loginTask = loginClient.PostAsJsonAsync(
+            "/api/v1/auth/apple",
+            new AppleRequest("apple-login-first", "replacement-code", "Apple Parent", "Apple Family", "America/Los_Angeles", null),
+            Json);
+        await _appleAuthorizations.ExchangeStarted.Task.WaitAsync(TimeSpan.FromSeconds(10));
+
+        using var deleteClient = _factory.CreateClient();
+        deleteClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apple.AccessToken);
+        (await deleteClient.DeleteAsync("/api/v1/account")).StatusCode.Should().Be(HttpStatusCode.Conflict);
+
+        _appleAuthorizations.AllowExchange.TrySetResult();
+        var loginResponse = await loginTask;
+        loginResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        var replacement = await loginResponse.Content.ReadFromJsonAsync<AuthResponse>(Json);
+        replacement.Should().NotBeNull();
+
+        deleteClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", replacement!.AccessToken);
+        (await deleteClient.DeleteAsync("/api/v1/account")).StatusCode.Should().Be(HttpStatusCode.NoContent);
+        _appleAuthorizations.RevokedTokens.Should().Contain(new[] { "encrypted:initial-code", "encrypted:replacement-code" });
+    }
+
+    [Fact]
+    public async Task Apple_email_link_that_locks_first_finishes_before_account_can_be_deleted()
+    {
+        var parent = await Post<AuthResponse>(
+            "/api/v1/auth/register",
+            new RegisterRequest("link-race@example.com", "Password123!", "Parent", "Family", "America/Los_Angeles"),
+            HttpStatusCode.Created);
+        _appleAuthorizations.BlockedExchangeCode = "link-code";
+
+        using var linkClient = _factory.CreateClient();
+        var linkTask = linkClient.PostAsJsonAsync(
+            "/api/v1/auth/apple",
+            new AppleRequest("link-race", "link-code", "Parent", "Family", "America/Los_Angeles", null),
+            Json);
+        await _appleAuthorizations.ExchangeStarted.Task.WaitAsync(TimeSpan.FromSeconds(10));
+
+        using var deleteClient = _factory.CreateClient();
+        deleteClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", parent.AccessToken);
+        (await deleteClient.DeleteAsync("/api/v1/account")).StatusCode.Should().Be(HttpStatusCode.Conflict);
+
+        _appleAuthorizations.AllowExchange.TrySetResult();
+        var linkResponse = await linkTask;
+        linkResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        var linked = await linkResponse.Content.ReadFromJsonAsync<AuthResponse>(Json);
+        linked.Should().NotBeNull();
+
+        deleteClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", linked!.AccessToken);
+        (await deleteClient.DeleteAsync("/api/v1/account")).StatusCode.Should().Be(HttpStatusCode.NoContent);
+        _appleAuthorizations.RevokedTokens.Should().Contain("encrypted:link-code");
     }
 
     private async Task<Guid> CreateOtherFamilyLoan()
@@ -363,21 +432,36 @@ public sealed class BankOfDadFlowTests : IAsyncLifetime
 
     private sealed class CapturingAppleAuthorizationService : IAppleAuthorizationService
     {
-        public List<string> ExchangedCodes { get; } = [];
-        public List<string> RevokedTokens { get; } = [];
+        public ConcurrentQueue<string> ExchangedCodes { get; } = [];
+        public ConcurrentQueue<string> RevokedTokens { get; } = [];
         public bool FailRevocation { get; set; }
+        public bool BlockRevocation { get; set; }
+        public string? BlockedExchangeCode { get; set; }
+        public TaskCompletionSource RevocationStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource AllowRevocation { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource ExchangeStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource AllowExchange { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        public Task<string> ExchangeCodeAsync(string authorizationCode, string expectedSubject, CancellationToken cancellationToken = default)
+        public async Task<string> ExchangeCodeAsync(string authorizationCode, string expectedSubject, CancellationToken cancellationToken = default)
         {
-            ExchangedCodes.Add(authorizationCode);
-            return Task.FromResult($"encrypted:{authorizationCode}");
+            ExchangedCodes.Enqueue(authorizationCode);
+            if (authorizationCode == BlockedExchangeCode)
+            {
+                ExchangeStarted.TrySetResult();
+                await AllowExchange.Task.WaitAsync(cancellationToken);
+            }
+            return $"encrypted:{authorizationCode}";
         }
 
-        public Task RevokeAsync(string encryptedRefreshToken, CancellationToken cancellationToken = default)
+        public async Task RevokeAsync(string encryptedRefreshToken, CancellationToken cancellationToken = default)
         {
-            RevokedTokens.Add(encryptedRefreshToken);
+            RevokedTokens.Enqueue(encryptedRefreshToken);
             if (FailRevocation) throw new AppleAuthorizationException("Simulated Apple outage.");
-            return Task.CompletedTask;
+            if (BlockRevocation)
+            {
+                RevocationStarted.TrySetResult();
+                await AllowRevocation.Task.WaitAsync(cancellationToken);
+            }
         }
     }
 

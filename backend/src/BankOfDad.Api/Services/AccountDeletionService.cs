@@ -4,76 +4,53 @@ using System.Data;
 using BankOfDad.Domain;
 using BankOfDad.Infrastructure.Data;
 using BankOfDad.Infrastructure.Security;
+using BankOfDad.Infrastructure.Time;
 using Microsoft.EntityFrameworkCore;
 
-public sealed class AccountDeletionService(BankOfDadDbContext db, IAppleAuthorizationService appleAuthorization)
+public sealed class AccountDeletionService(BankOfDadDbContext db, IAppleAuthorizationService appleAuthorization, IClock clock)
 {
     public async Task DeleteParentAsync(Guid userId, CancellationToken ct)
     {
         await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct).ConfigureAwait(false);
 
         var existing = await db.Users
-            .SingleOrDefaultAsync(x => x.Id == userId && x.Role == Role.Parent, ct)
+            .FromSqlRaw("SELECT * FROM \"Users\" WHERE \"Id\" = {0} AND \"Role\" = 'Parent' FOR UPDATE NOWAIT", userId)
+            .SingleOrDefaultAsync(ct)
             .ConfigureAwait(false);
         if (existing is null) throw new ApiException(404, "Parent account not found.");
 
-        var deletionStarted = false;
-        try
+        if (existing.AppleDeletionStartedAt is not null)
         {
-            var updated = await db.Users
-                .Where(x => x.Id == userId && x.Role == Role.Parent && x.AppleDeletionStartedAt == null)
-                .ExecuteUpdateAsync(s => s.SetProperty(x => x.AppleDeletionStartedAt, DateTimeOffset.UtcNow), ct)
-                .ConfigureAwait(false);
-            if (updated == 0)
-            {
-                throw new ApiException(409, "Account deletion is already in progress.");
-            }
-
-            existing.AppleDeletionStartedAt = DateTimeOffset.UtcNow;
-            deletionStarted = true;
-
-            if (existing.AppleSubject is not null)
-            {
-                var tokens = await db.AppleRefreshTokens
-                    .Where(x => x.UserId == userId && x.RevokedAt == null)
-                    .OrderBy(x => x.CreatedAt)
-                    .Select(x => new { x.Id, x.TokenEncrypted })
-                    .ToListAsync(ct)
-                    .ConfigureAwait(false);
-                if (tokens.Count == 0)
-                {
-                    throw new ApiException(409, "Sign in with Apple must be completed again before this account can be deleted.", "Sign out, sign in with Apple again, then retry account deletion.");
-                }
-
-                foreach (var token in tokens)
-                {
-                    try
-                    {
-                        await appleAuthorization.RevokeAsync(token.TokenEncrypted, ct).ConfigureAwait(false);
-                    }
-                    catch (AppleAuthorizationException)
-                    {
-                        throw new ApiException(503, "Apple authorization could not be revoked.", "Your account was not deleted. Please try again.");
-                    }
-                }
-
-                foreach (var token in tokens)
-                {
-                    await db.AppleRefreshTokens
-                        .Where(x => x.Id == token.Id)
-                        .ExecuteUpdateAsync(s => s.SetProperty(x => x.RevokedAt, DateTimeOffset.UtcNow), ct)
-                        .ConfigureAwait(false);
-                }
-            }
+            throw new ApiException(409, "Account deletion is already in progress.");
         }
-        catch
+        existing.AppleDeletionStartedAt = clock.UtcNow;
+        await db.SaveChangesAsync(ct).ConfigureAwait(false);
+
+        if (existing.AppleSubject is not null)
         {
-            if (deletionStarted)
+            var tokens = await db.AppleRefreshTokens
+                .Where(x => x.UserId == userId && x.RevokedAt == null)
+                .OrderBy(x => x.CreatedAt)
+                .ToListAsync(ct)
+                .ConfigureAwait(false);
+            if (tokens.Count == 0)
             {
-                existing.AppleDeletionStartedAt = null;
-                await db.SaveChangesAsync(ct).ConfigureAwait(false);
+                throw new ApiException(409, "Sign in with Apple must be completed again before this account can be deleted.", "Sign out, sign in with Apple again, then retry account deletion.");
             }
-            throw;
+
+            foreach (var token in tokens)
+            {
+                try
+                {
+                    await appleAuthorization.RevokeAsync(token.TokenEncrypted, ct).ConfigureAwait(false);
+                }
+                catch (AppleAuthorizationException)
+                {
+                    throw new ApiException(503, "Apple authorization could not be revoked.", "Your account was not deleted. Please try again.");
+                }
+                token.RevokedAt = clock.UtcNow;
+            }
+            await db.SaveChangesAsync(ct).ConfigureAwait(false);
         }
 
         var familyId = existing.FamilyId;
