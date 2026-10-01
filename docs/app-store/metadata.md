@@ -38,10 +38,12 @@ Complete App Store Connect answers from the actual submitted build and the deplo
 | Category | Data type | Collected? | Linked to user? | Used for tracking? | Purpose |
 |---|---|---:|---:|---:|---|
 | Contact Info | Name, Email Address | Yes | Yes | No | Account and family access |
-| User Content | Other User Content (loan, bill, payment, and note content) | Yes | Yes | No | Family ledger |
-| Identifiers | User ID, Apple identifier, device token | Yes | Yes | No | Authentication and push notifications |
-| Sensitive Info | Authentication credentials (password hash and session credentials) | Yes | Yes | No | Account security |
-| Diagnostics | Service error/security logs, if enabled by the operator | Operator-configured | Potentially | No | Security and troubleshooting |
+| Financial Info | Other Financial Info (family loans, bills, balances, debt, payments, fees, and repayment schedules) | Yes | Yes | No | Family ledger |
+| User Content | Other User Content (payment and ledger notes) | Yes | Yes | No | Family ledger |
+| Identifiers | User ID (internal account and Apple account identity) | Yes | Yes | No | Authentication and family access |
+| Identifiers | Device ID (APNs device token and paired-device identity) | Yes | Yes | No | Push notifications and device access |
+| Diagnostics | Other Diagnostic Data (retained service error/security logs, if enabled by the operator) | Operator-configured | Potentially | No | Security and troubleshooting |
+| Other Data | Other Data Types (password hash, encrypted Apple refresh token, and session credential records) | Yes | Yes | No | Account security and authorization revocation |
 
 Select **Data Used to Track You: No**. Do not select advertising, analytics, sale, or third-party tracking. Review the final answers against the production configuration before submission.
 

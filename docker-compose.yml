@@ -35,17 +35,21 @@ services:
       ConnectionStrings__Default: "Host=db;Port=5432;Database=${POSTGRES_DB:-bankofdad};Username=${POSTGRES_USER:-bankofdad};Password=${POSTGRES_PASSWORD:-bankofdad-dev}"
       Jwt__SigningKey: ${JWT_SIGNING_KEY:-dev-only-signing-key-change-me-0123456789abcdef}
       Apple__ClientId: ${APPLE_CLIENT_ID:-com.example.bankofdad}
+      Apple__TeamId: ${APPLE_TEAM_ID:-}
+      Apple__KeyId: ${APPLE_KEY_ID:-}
+      Apple__KeyPath: ${APPLE_KEY_PATH:-/run/secrets/apple/SignInWithAppleKey.p8}
+      Apple__TokenEncryptionKey: ${APPLE_TOKEN_ENCRYPTION_KEY:-}
       Apns__KeyId: ${APNS_KEY_ID:-}
       Apns__TeamId: ${APNS_TEAM_ID:-}
       Apns__BundleId: ${APNS_BUNDLE_ID:-com.example.bankofdad}
       Apns__UseSandbox: ${APNS_USE_SANDBOX:-true}
-      Apns__KeyPath: ${APNS_KEY_PATH:-/run/secrets/apns/AuthKey.p8}
+      Apns__KeyPath: ${APNS_KEY_PATH:-/run/secrets/apple/AuthKey.p8}
       # Development-only UI-test endpoints (/api/v1/testing). Ignored unless ASPNETCORE_ENVIRONMENT=Development.
       TestHooks__Enabled: ${TEST_HOOKS_ENABLED:-false}
     ports:
       - "8080:8080"
     volumes:
-      - ./secrets:/run/secrets/apns:ro
+      - ./secrets:/run/secrets/apple:ro
 
 volumes:
   pgdata:

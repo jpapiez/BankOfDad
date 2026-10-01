@@ -12,6 +12,7 @@ The app connects to the family's private Bank of Dad service. Family devices mus
 - **A child cannot pair:** ask a parent to generate a new pairing code. Codes expire and can be used only once.
 - **Push notifications are missing:** confirm notifications are enabled for Bank of Dad and that the service has the current device registered.
 - **Sign-in fails:** confirm the device has network access to the private service and use the same Apple ID or email account that was invited.
+- **Deletion asks you to sign in with Apple again:** sign out, complete Sign in with Apple once to let the service retain a new encrypted revocation token, then retry deletion. This can occur for accounts created before revocable Apple-token storage was added.
 
 ## Help and deletion requests
 

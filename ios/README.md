@@ -32,7 +32,7 @@ TestFlight installs the app on real iPhones without an App Store listing. You ne
 2. **Xcode:** sign in under Xcode > Settings > Accounts. If your team has never had a device registered, connect your iPhone and run the app from Xcode once first. Archiving needs a development profile, and Apple only issues one when the team has at least one device.
 3. **Register the bundle ID:** run `UPLOAD=0 ./scripts/testflight.sh` once. Xcode's automatic signing registers the ID with the Sign in with Apple and Push Notifications capabilities.
 4. **App Store Connect:** under Apps, click + > New App. Choose iOS, pick your bundle ID, and enter any SKU. The name must be unique across the App Store, but the home-screen name stays "Bank of Dad".
-5. **Server:** set `APPLE_CLIENT_ID` and `APNS_BUNDLE_ID` to the bundle ID. For push, create an APNs key (Certificates, IDs & Profiles > Keys, choosing Sandbox & Production). Set `APNS_KEY_ID`, set `APNS_TEAM_ID`, and install the `.p8`. Set `APNS_USE_SANDBOX=false`, because TestFlight builds register production push tokens.
+5. **Server:** set `APPLE_CLIENT_ID` and `APNS_BUNDLE_ID` to the bundle ID. Configure `APPLE_TEAM_ID`, `APPLE_KEY_ID`, `APPLE_KEY_PATH`, and a stable 32-byte base64 `APPLE_TOKEN_ENCRYPTION_KEY` so authorization codes can be exchanged, Apple refresh tokens encrypted at rest, and Sign in with Apple authorization revoked during account deletion. Install the Sign in with Apple `.p8` at the configured path. For push, configure its Apple private key, `APNS_KEY_ID`, and `APNS_TEAM_ID`. Set `APNS_USE_SANDBOX=false`, because TestFlight builds register production push tokens.
 
 ### Upload a build
 

@@ -101,7 +101,7 @@ Then [point the app at that URL](../README.md#3-point-the-app-at-the-server).
 | `TS_HOSTNAME` | `bankofdad` | Node name, which becomes `https://<name>.<tailnet>.ts.net`. |
 | `TS_EXTRA_ARGS` | | For example `--advertise-tags=tag:bankofdad`. |
 | `BANKOFDAD_IMAGE` | `ghcr.io/jpapiez/bankofdad-api:latest` | Pin `:sha-<short sha>` to hold a version. |
-| `APPLE_CLIENT_ID`, `APNS_KEY_ID`, `APNS_TEAM_ID`, `APNS_BUNDLE_ID`, `APNS_USE_SANDBOX` | as in [`.env.example`](../.env.example) | Sign in with Apple and push notifications. |
+| `APPLE_CLIENT_ID`, `APPLE_TEAM_ID`, `APPLE_KEY_ID`, `APPLE_TOKEN_ENCRYPTION_KEY`, `APNS_KEY_ID`, `APNS_TEAM_ID`, `APNS_BUNDLE_ID`, `APNS_USE_SANDBOX` | as in [`.env.example`](../.env.example) | Sign in with Apple token retention/revocation and push notifications. |
 | `APNS_KEY_FILE` | | Local path to your APNs `AuthKey.p8`. It's copied to the VM. |
 | `GHCR_USER`, `GHCR_TOKEN` | | Only needed if `BANKOFDAD_IMAGE` points at a private registry image (a token with `read:packages`). The default image is public. |
 

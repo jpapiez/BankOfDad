@@ -123,7 +123,7 @@ Clients must tolerate enum values they don't know yet.
 |---|---|---|---|
 | POST | `/api/v1/auth/register` | `{ email, password, displayName, familyName, timeZone }` | 201 `AuthResponse` (creates family + parent) |
 | POST | `/api/v1/auth/login` | `{ email, password }` | 200 `AuthResponse` |
-| POST | `/api/v1/auth/apple` | `{ identityToken, displayName?, familyName?, timeZone?, inviteCode? }` | 200 `AuthResponse` (existing Apple user) / 201 (new user: creates family, or joins one via `inviteCode`) |
+| POST | `/api/v1/auth/apple` | `{ identityToken, authorizationCode, displayName?, familyName?, timeZone?, inviteCode? }` | 200 `AuthResponse` (existing Apple user) / 201 (new user: creates family, or joins one via `inviteCode`). The authorization code is exchanged server-side and the resulting refresh token is encrypted for revocation during account deletion. |
 | POST | `/api/v1/auth/refresh` | `{ refreshToken }` | 200 `AuthResponse` |
 | POST | `/api/v1/auth/logout` | `{ refreshToken }` | 204 (revokes) |
 | POST | `/api/v1/auth/pair` | `{ code, deviceName }` | 200 `AuthResponse` for the child |

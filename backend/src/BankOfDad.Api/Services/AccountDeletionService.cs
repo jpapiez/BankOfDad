@@ -3,16 +3,32 @@ namespace BankOfDad.Api.Services;
 using System.Data;
 using BankOfDad.Domain;
 using BankOfDad.Infrastructure.Data;
+using BankOfDad.Infrastructure.Security;
 using Microsoft.EntityFrameworkCore;
 
-public sealed class AccountDeletionService(BankOfDadDbContext db)
+public sealed class AccountDeletionService(BankOfDadDbContext db, IAppleAuthorizationService appleAuthorization)
 {
     public async Task DeleteParentAsync(Guid userId, CancellationToken ct)
     {
-        await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct).ConfigureAwait(false);
-
         var parent = await db.Users.SingleOrDefaultAsync(x => x.Id == userId && x.Role == Role.Parent, ct).ConfigureAwait(false)
             ?? throw new ApiException(404, "Parent account not found.");
+        if (parent.AppleSubject is not null)
+        {
+            if (string.IsNullOrWhiteSpace(parent.AppleRefreshTokenEncrypted))
+            {
+                throw new ApiException(409, "Sign in with Apple must be completed again before this account can be deleted.", "Sign out, sign in with Apple again, then retry account deletion.");
+            }
+            try
+            {
+                await appleAuthorization.RevokeAsync(parent.AppleRefreshTokenEncrypted, ct).ConfigureAwait(false);
+            }
+            catch (AppleAuthorizationException)
+            {
+                throw new ApiException(503, "Apple authorization could not be revoked.", "Your account was not deleted. Please try again.");
+            }
+        }
+
+        await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct).ConfigureAwait(false);
         var familyId = parent.FamilyId;
         var remainingParentId = await db.Users
             .Where(x => x.FamilyId == familyId && x.Role == Role.Parent && x.Id != userId)

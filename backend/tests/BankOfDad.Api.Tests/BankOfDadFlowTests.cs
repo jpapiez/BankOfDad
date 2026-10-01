@@ -34,6 +34,7 @@ public sealed class BankOfDadFlowTests : IAsyncLifetime
     private HttpClient _client = null!;
     private readonly FakeClock _clock = new(new DateTimeOffset(2026, 10, 17, 12, 0, 0, TimeSpan.Zero));
     private readonly CapturingPushSender _pushes = new();
+    private readonly CapturingAppleAuthorizationService _appleAuthorizations = new();
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
     {
         Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
@@ -42,7 +43,7 @@ public sealed class BankOfDadFlowTests : IAsyncLifetime
     public async Task InitializeAsync()
     {
         await _postgres.StartAsync();
-        _factory = new TestFactory(_postgres.GetConnectionString(), _clock, _pushes);
+        _factory = new TestFactory(_postgres.GetConnectionString(), _clock, _pushes, _appleAuthorizations);
         _client = _factory.CreateClient();
     }
 
@@ -131,8 +132,9 @@ public sealed class BankOfDadFlowTests : IAsyncLifetime
         coparent.User.Role.Should().Be(Role.Parent);
 
         Use(null);
-        var apple = await Post<AuthResponse>("/api/v1/auth/apple", new AppleRequest("apple-subject-1", "Apple Dad", "Apple Family", "America/Los_Angeles", null), HttpStatusCode.Created);
+        var apple = await Post<AuthResponse>("/api/v1/auth/apple", new AppleRequest("apple-subject-1", "authorization-code-1", "Apple Dad", "Apple Family", "America/Los_Angeles", null), HttpStatusCode.Created);
         apple.User.Role.Should().Be(Role.Parent);
+        _appleAuthorizations.ExchangedCodes.Should().Contain("authorization-code-1");
 
         Use(rotated.AccessToken);
         var child = await Post<ChildDto>("/api/v1/family/children", new ChildRequest("Alex", null), HttpStatusCode.Created);
@@ -200,6 +202,46 @@ public sealed class BankOfDadFlowTests : IAsyncLifetime
         (await db.Loans.Where(x => x.Id == loan.Id).Select(x => x.CreatedByParentId).SingleAsync()).Should().Be(other.User.Id);
     }
 
+    [Fact]
+    public async Task Deleting_Apple_parent_revokes_Apple_refresh_token_before_local_deletion()
+    {
+        var apple = await Post<AuthResponse>("/api/v1/auth/apple", new AppleRequest("apple-delete", "delete-code", "Apple Parent", "Apple Family", "America/Los_Angeles", null), HttpStatusCode.Created);
+        Use(apple.AccessToken);
+
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<BankOfDadDbContext>();
+            var stored = await db.Users.Where(x => x.Id == apple.User.Id).Select(x => x.AppleRefreshTokenEncrypted).SingleAsync();
+            stored.Should().Be("encrypted:delete-code").And.NotContain("refresh-token");
+        }
+
+        (await _client.DeleteAsync("/api/v1/account")).StatusCode.Should().Be(HttpStatusCode.NoContent);
+        _appleAuthorizations.RevokedTokens.Should().ContainSingle().Which.Should().Be("encrypted:delete-code");
+
+        using var deletedScope = _factory.Services.CreateScope();
+        var deletedDb = deletedScope.ServiceProvider.GetRequiredService<BankOfDadDbContext>();
+        (await deletedDb.Users.AnyAsync(x => x.Id == apple.User.Id)).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Apple_revocation_failure_keeps_account_and_family_data()
+    {
+        var apple = await Post<AuthResponse>("/api/v1/auth/apple", new AppleRequest("apple-failure", "failure-code", "Apple Parent", "Apple Family", "America/Los_Angeles", null), HttpStatusCode.Created);
+        Use(apple.AccessToken);
+        var child = await Post<ChildDto>("/api/v1/family/children", new ChildRequest("Child", null), HttpStatusCode.Created);
+        _appleAuthorizations.FailRevocation = true;
+
+        var response = await _client.DeleteAsync("/api/v1/account");
+        response.StatusCode.Should().Be(HttpStatusCode.ServiceUnavailable);
+        (await response.Content.ReadAsStringAsync()).Should().Contain("Your account was not deleted");
+
+        Use(apple.AccessToken);
+        (await Get<FamilyDto>("/api/v1/family")).Children.Should().ContainSingle(x => x.Id == child.Id);
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<BankOfDadDbContext>();
+        (await db.Users.AnyAsync(x => x.Id == apple.User.Id)).Should().BeTrue();
+    }
+
     private async Task<Guid> CreateOtherFamilyLoan()
     {
         Use(null);
@@ -236,7 +278,7 @@ public sealed class BankOfDadFlowTests : IAsyncLifetime
         return (await response.Content.ReadFromJsonAsync<T>(Json))!;
     }
 
-    private sealed class TestFactory(string connectionString, FakeClock clock, CapturingPushSender pushes) : WebApplicationFactory<Program>
+    private sealed class TestFactory(string connectionString, FakeClock clock, CapturingPushSender pushes, CapturingAppleAuthorizationService appleAuthorizations) : WebApplicationFactory<Program>
     {
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
@@ -254,6 +296,8 @@ public sealed class BankOfDadFlowTests : IAsyncLifetime
                 services.AddSingleton<IClock>(clock);
                 services.RemoveAll<IAppleTokenValidator>();
                 services.AddScoped<IAppleTokenValidator, FakeAppleTokenValidator>();
+                services.RemoveAll<IAppleAuthorizationService>();
+                services.AddSingleton<IAppleAuthorizationService>(appleAuthorizations);
                 services.RemoveAll<IPushSender>();
                 services.AddSingleton<IPushSender>(pushes);
             });
@@ -268,6 +312,26 @@ public sealed class BankOfDadFlowTests : IAsyncLifetime
     private sealed class FakeAppleTokenValidator : IAppleTokenValidator
     {
         public Task<AppleUser> ValidateAsync(string identityToken, CancellationToken cancellationToken = default) => Task.FromResult(new AppleUser(identityToken, $"{identityToken}@example.com"));
+    }
+
+    private sealed class CapturingAppleAuthorizationService : IAppleAuthorizationService
+    {
+        public List<string> ExchangedCodes { get; } = [];
+        public List<string> RevokedTokens { get; } = [];
+        public bool FailRevocation { get; set; }
+
+        public Task<string> ExchangeCodeAsync(string authorizationCode, string expectedSubject, CancellationToken cancellationToken = default)
+        {
+            ExchangedCodes.Add(authorizationCode);
+            return Task.FromResult($"encrypted:{authorizationCode}");
+        }
+
+        public Task RevokeAsync(string encryptedRefreshToken, CancellationToken cancellationToken = default)
+        {
+            RevokedTokens.Add(encryptedRefreshToken);
+            if (FailRevocation) throw new AppleAuthorizationException("Simulated Apple outage.");
+            return Task.CompletedTask;
+        }
     }
 
     private sealed class CapturingPushSender : IPushSender

@@ -32,7 +32,7 @@ public record BillPaymentAllocationDto(AllocationTarget Target, Guid? ChargeId, 
 
 public record RegisterRequest(string Email, string Password, string DisplayName, string FamilyName, string TimeZone);
 public record LoginRequest(string Email, string Password);
-public record AppleRequest(string IdentityToken, string? DisplayName, string? FamilyName, string? TimeZone, string? InviteCode);
+public record AppleRequest(string IdentityToken, string AuthorizationCode, string? DisplayName, string? FamilyName, string? TimeZone, string? InviteCode);
 public record RefreshRequest(string RefreshToken);
 public record LogoutRequest(string RefreshToken);
 public record PairRequest(string Code, string? DeviceName);

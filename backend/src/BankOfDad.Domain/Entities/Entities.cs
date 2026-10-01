@@ -23,6 +23,7 @@ public class User
     public string? NormalizedEmail { get; set; }
     public string? PasswordHash { get; set; }
     public string? AppleSubject { get; set; }
+    public string? AppleRefreshTokenEncrypted { get; set; }
     public string? AvatarColor { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
 }

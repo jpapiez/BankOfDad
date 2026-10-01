@@ -63,6 +63,7 @@ public sealed class BankOfDadDbContext(DbContextOptions<BankOfDadDbContext> opti
             b.Property(x => x.Email).HasMaxLength(320);
             b.Property(x => x.NormalizedEmail).HasMaxLength(320);
             b.Property(x => x.AppleSubject).HasMaxLength(200);
+            b.Property(x => x.AppleRefreshTokenEncrypted).HasMaxLength(2048);
             b.Property(x => x.AvatarColor).HasMaxLength(20);
             b.HasIndex(x => x.NormalizedEmail).IsUnique().HasFilter("\"NormalizedEmail\" IS NOT NULL");
             b.HasIndex(x => x.AppleSubject).IsUnique().HasFilter("\"AppleSubject\" IS NOT NULL");

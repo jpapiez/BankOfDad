@@ -59,6 +59,7 @@ builder.Services.AddScoped<BillSweeper>();
 builder.Services.AddSingleton<IClock, SystemClock>();
 builder.Services.AddScoped<IPasswordService, PasswordService>();
 builder.Services.AddScoped<IAppleTokenValidator, AppleTokenValidator>();
+builder.Services.AddHttpClient<IAppleAuthorizationService, AppleAuthorizationService>();
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<AccountDeletionService>();
 builder.Services.AddScoped<NotificationService>();
@@ -209,11 +210,16 @@ auth.MapPost("/accept-invite", async (AcceptInviteRequest request, BankOfDadDbCo
     return Results.Created("/api/v1/auth/me", await authService.IssueAsync(user, null, ct));
 });
 
-auth.MapPost("/apple", async (AppleRequest request, BankOfDadDbContext db, AuthService authService, IAppleTokenValidator apple, IClock clock, CancellationToken ct) =>
+auth.MapPost("/apple", async (AppleRequest request, BankOfDadDbContext db, AuthService authService, IAppleTokenValidator apple, IAppleAuthorizationService appleAuthorization, IClock clock, CancellationToken ct) =>
 {
     var appleUser = await apple.ValidateAsync(request.IdentityToken, ct);
     var existing = await db.Users.SingleOrDefaultAsync(x => x.AppleSubject == appleUser.Subject, ct);
-    if (existing is not null) return Results.Ok(await authService.IssueAsync(existing, null, ct));
+    if (existing is not null)
+    {
+        existing.AppleRefreshTokenEncrypted = await ExchangeAppleCode(request.AuthorizationCode, appleUser.Subject, appleAuthorization, ct);
+        await db.SaveChangesAsync(ct);
+        return Results.Ok(await authService.IssueAsync(existing, null, ct));
+    }
     if (appleUser.Email is not null)
     {
         // Apple only issues verified emails, so link to an existing email/password parent account.
@@ -223,27 +229,31 @@ auth.MapPost("/apple", async (AppleRequest request, BankOfDadDbContext db, AuthS
         {
             if (byEmail.AppleSubject is not null) throw new ApiException(409, "This email is linked to a different Apple ID.");
             byEmail.AppleSubject = appleUser.Subject;
+            byEmail.AppleRefreshTokenEncrypted = await ExchangeAppleCode(request.AuthorizationCode, appleUser.Subject, appleAuthorization, ct);
             await db.SaveChangesAsync(ct);
             return Results.Ok(await authService.IssueAsync(byEmail, null, ct));
         }
     }
     Guid familyId;
+    FamilyInvite? acceptedInvite = null;
+    Family? newFamily = null;
     if (!string.IsNullOrWhiteSpace(request.InviteCode))
     {
-        var invite = await db.FamilyInvites.SingleOrDefaultAsync(x => x.CodeHash == SecretHasher.Sha256(CodeGenerator.NormalizeCode(request.InviteCode)), ct);
-        if (invite is null || invite.UsedAt is not null || invite.ExpiresAt <= clock.UtcNow) throw new ApiException(401, "Invalid invite code.");
-        invite.UsedAt = clock.UtcNow;
-        familyId = invite.FamilyId;
+        acceptedInvite = await db.FamilyInvites.SingleOrDefaultAsync(x => x.CodeHash == SecretHasher.Sha256(CodeGenerator.NormalizeCode(request.InviteCode)), ct);
+        if (acceptedInvite is null || acceptedInvite.UsedAt is not null || acceptedInvite.ExpiresAt <= clock.UtcNow) throw new ApiException(401, "Invalid invite code.");
+        familyId = acceptedInvite.FamilyId;
     }
     else
     {
         var tz = request.TimeZone ?? "America/Los_Angeles";
         ValidateTimeZone(tz);
-        var family = new Family { Name = request.FamilyName ?? "Family", TimeZone = tz, CreatedAt = clock.UtcNow };
-        db.Families.Add(family);
-        familyId = family.Id;
+        newFamily = new Family { Name = request.FamilyName ?? "Family", TimeZone = tz, CreatedAt = clock.UtcNow };
+        familyId = newFamily.Id;
     }
-    var user = new User { FamilyId = familyId, Role = Role.Parent, DisplayName = request.DisplayName ?? appleUser.Email ?? "Parent", Email = appleUser.Email, NormalizedEmail = appleUser.Email is null ? null : NormalizeEmail(appleUser.Email), AppleSubject = appleUser.Subject, CreatedAt = clock.UtcNow };
+    var encryptedRefreshToken = await ExchangeAppleCode(request.AuthorizationCode, appleUser.Subject, appleAuthorization, ct);
+    if (acceptedInvite is not null) acceptedInvite.UsedAt = clock.UtcNow;
+    if (newFamily is not null) db.Families.Add(newFamily);
+    var user = new User { FamilyId = familyId, Role = Role.Parent, DisplayName = request.DisplayName ?? appleUser.Email ?? "Parent", Email = appleUser.Email, NormalizedEmail = appleUser.Email is null ? null : NormalizeEmail(appleUser.Email), AppleSubject = appleUser.Subject, AppleRefreshTokenEncrypted = encryptedRefreshToken, CreatedAt = clock.UtcNow };
     db.Users.Add(user);
     await db.SaveChangesAsync(ct);
     return Results.Created("/api/v1/auth/me", await authService.IssueAsync(user, null, ct));
@@ -575,6 +585,19 @@ static DateOnly TodayFor(string timeZone, IClock clock)
 }
 
 static async Task<string> GetFamilyTimeZone(Guid familyId, BankOfDadDbContext db, CancellationToken ct) => (await db.Families.FindAsync([familyId], ct) ?? throw new ApiException(404, "Family not found.")).TimeZone;
+
+static async Task<string> ExchangeAppleCode(string authorizationCode, string expectedSubject, IAppleAuthorizationService appleAuthorization, CancellationToken ct)
+{
+    if (string.IsNullOrWhiteSpace(authorizationCode)) throw new ApiException(400, "Apple authorization code is required.");
+    try
+    {
+        return await appleAuthorization.ExchangeCodeAsync(authorizationCode, expectedSubject, ct);
+    }
+    catch (AppleAuthorizationException)
+    {
+        throw new ApiException(503, "Sign in with Apple could not be completed.", "Apple authorization could not be securely retained. Please try again.");
+    }
+}
 
 static async Task<FamilyDto> GetFamilyDto(Guid familyId, BankOfDadDbContext db, IClock clock, CancellationToken ct)
 {

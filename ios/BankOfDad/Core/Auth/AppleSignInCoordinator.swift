@@ -26,13 +26,15 @@ final class AppleSignInCoordinator: NSObject, ASAuthorizationControllerDelegate,
     func authorizationController(controller: ASAuthorizationController, didCompleteWithAuthorization authorization: ASAuthorization) {
         guard let credential = authorization.credential as? ASAuthorizationAppleIDCredential,
               let tokenData = credential.identityToken,
-              let token = String(data: tokenData, encoding: .utf8) else {
-            completion?(.failure(AppleSignInError.missingIdentityToken))
+              let token = String(data: tokenData, encoding: .utf8),
+              let codeData = credential.authorizationCode,
+              let code = String(data: codeData, encoding: .utf8) else {
+            completion?(.failure(AppleSignInError.missingCredentials))
             completion = nil
             return
         }
         let nameParts = [credential.fullName?.givenName, credential.fullName?.familyName].compactMap { $0 }
-        completion?(.success(AppleCredentials(identityToken: token, displayName: nameParts.isEmpty ? nil : nameParts.joined(separator: " "))))
+        completion?(.success(AppleCredentials(identityToken: token, authorizationCode: code, displayName: nameParts.isEmpty ? nil : nameParts.joined(separator: " "))))
         completion = nil
     }
 
@@ -44,10 +46,11 @@ final class AppleSignInCoordinator: NSObject, ASAuthorizationControllerDelegate,
 
 struct AppleCredentials: Sendable {
     let identityToken: String
+    let authorizationCode: String
     let displayName: String?
 }
 
 enum AppleSignInError: LocalizedError {
-    case missingIdentityToken
-    var errorDescription: String? { "Apple did not return an identity token." }
+    case missingCredentials
+    var errorDescription: String? { "Apple did not return the credentials needed to create a revocable account." }
 }

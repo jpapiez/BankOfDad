@@ -94,10 +94,15 @@ struct ParentSignInView: View {
         case .success(let authorization):
             guard let credential = authorization.credential as? ASAuthorizationAppleIDCredential,
                   let tokenData = credential.identityToken,
-                  let token = String(data: tokenData, encoding: .utf8) else { return }
+                  let token = String(data: tokenData, encoding: .utf8),
+                  let codeData = credential.authorizationCode,
+                  let code = String(data: codeData, encoding: .utf8) else {
+                authSession.errorMessage = "Apple did not return the authorization needed to create a revocable account."
+                return
+            }
             let nameParts = [credential.fullName?.givenName, credential.fullName?.familyName].compactMap { $0 }
             let name = nameParts.isEmpty ? nil : nameParts.joined(separator: " ")
-            await authSession.signInWithApple(identityToken: token, displayName: name, familyName: familyName.isEmpty ? nil : familyName, timeZone: TimeZone.current.identifier, inviteCode: inviteCode.isEmpty ? nil : inviteCode)
+            await authSession.signInWithApple(identityToken: token, authorizationCode: code, displayName: name, familyName: familyName.isEmpty ? nil : familyName, timeZone: TimeZone.current.identifier, inviteCode: inviteCode.isEmpty ? nil : inviteCode)
         case .failure(let error):
             authSession.errorMessage = error.localizedDescription
         }
