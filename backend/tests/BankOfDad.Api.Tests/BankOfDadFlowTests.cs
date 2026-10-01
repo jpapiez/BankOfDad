@@ -242,6 +242,53 @@ public sealed class BankOfDadFlowTests : IAsyncLifetime
         (await db.Users.AnyAsync(x => x.Id == apple.User.Id)).Should().BeTrue();
     }
 
+    [Fact]
+    public async Task Replacing_Apple_token_keeps_prior_refresh_token_ledger_and_revokes_both_on_delete()
+    {
+        var first = await Post<AuthResponse>("/api/v1/auth/apple", new AppleRequest("apple-replace", "first-code", "Apple Parent", "Apple Family", "America/Los_Angeles", null), HttpStatusCode.Created);
+        var second = await Post<AuthResponse>("/api/v1/auth/apple", new AppleRequest("apple-replace", "second-code", "Apple Parent", "Apple Family", "America/Los_Angeles", null), HttpStatusCode.OK);
+        Use(second.AccessToken);
+
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<BankOfDadDbContext>();
+            var tokens = await db.AppleRefreshTokens
+                .Where(x => x.UserId == second.User.Id)
+                .OrderBy(x => x.CreatedAt)
+                .Select(x => new { x.TokenEncrypted, x.RevokedAt, x.ReplacedByTokenId })
+                .ToListAsync();
+            tokens.Should().HaveCount(2);
+            tokens[0].TokenEncrypted.Should().Be("encrypted:first-code");
+            tokens[0].RevokedAt.Should().NotBeNull();
+            tokens[0].ReplacedByTokenId.Should().BeNull();
+            tokens[1].TokenEncrypted.Should().Be("encrypted:second-code");
+            tokens[1].RevokedAt.Should().BeNull();
+        }
+
+        (await _client.DeleteAsync("/api/v1/account")).StatusCode.Should().Be(HttpStatusCode.NoContent);
+        _appleAuthorizations.RevokedTokens.Should().Contain(new[] { "encrypted:first-code", "encrypted:second-code" });
+    }
+
+    [Fact]
+    public async Task Concurrent_Apple_login_and_delete_do_not_leave_active_refresh_tokens()
+    {
+        var apple = await Post<AuthResponse>("/api/v1/auth/apple", new AppleRequest("apple-race", "race-code", "Apple Parent", "Apple Family", "America/Los_Angeles", null), HttpStatusCode.Created);
+        Use(apple.AccessToken);
+
+        var deleteTask = _client.DeleteAsync("/api/v1/account");
+        var replaceTask = _client.PostAsJsonAsync("/api/v1/auth/apple", new AppleRequest("apple-race", "new-code", "Apple Parent", "Apple Family", "America/Los_Angeles", null), Json);
+        var deleteResponse = await deleteTask;
+        var replaceResponse = await replaceTask;
+
+        deleteResponse.StatusCode.Should().BeOneOf(HttpStatusCode.NoContent, HttpStatusCode.ServiceUnavailable, HttpStatusCode.Conflict);
+        replaceResponse.StatusCode.Should().BeOneOf(HttpStatusCode.Conflict, HttpStatusCode.OK, HttpStatusCode.InternalServerError);
+
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<BankOfDadDbContext>();
+        var active = await db.AppleRefreshTokens.Where(x => x.UserId == apple.User.Id && x.RevokedAt == null).ToListAsync();
+        active.Should().BeEmpty();
+    }
+
     private async Task<Guid> CreateOtherFamilyLoan()
     {
         Use(null);
