@@ -43,7 +43,7 @@ final class NewLoanViewModel {
                               sendReceipts: sendReceipts)
     }
 
-    func load(family service: FamilyService) async {
+    func load(family service: any FamilyService) async {
         guard family == nil else { return }
         isLoading = true; defer { isLoading = false }
         do {
@@ -54,7 +54,7 @@ final class NewLoanViewModel {
         } catch { self.error = error.localizedDescription }
     }
 
-    func schedulePreview(service: LoanService) {
+    func schedulePreview(service: any LoanService) {
         previewTask?.cancel()
         guard let input else { preview = nil; return }
         previewTask = Task {
@@ -65,7 +65,7 @@ final class NewLoanViewModel {
         }
     }
 
-    func create(service: LoanService) async {
+    func create(service: any LoanService) async {
         guard let input else { return }
         isSaving = true; defer { isSaving = false }
         do { createdLoan = try await service.create(input); error = nil }

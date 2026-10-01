@@ -9,12 +9,12 @@ final class SettingsViewModel {
     var timeZone = TimeZone.current.identifier
     var error: String?
 
-    func load(service: FamilyService) async {
+    func load(service: any FamilyService) async {
         do { family = try await service.family(); name = family?.name ?? ""; timeZone = family?.timeZone ?? TimeZone.current.identifier; error = nil }
         catch { self.error = error.localizedDescription }
     }
 
-    func save(service: FamilyService) async {
+    func save(service: any FamilyService) async {
         do { family = try await service.updateFamily(name: name, timeZone: timeZone); error = nil }
         catch { self.error = error.localizedDescription }
     }
@@ -47,16 +47,20 @@ struct SettingsView: View {
                 Button("Save changes") { Task { await viewModel.save(service: environment.familyService) } }
                     .accessibilityIdentifier("settings.save")
             }
-            Section("Danger zone") {
-                Button("Delete My Account", role: .destructive) {
-                    showingDeleteConfirmation = true
+            if environment.isDemo {
+                DemoSettingsSection()
+            } else {
+                Section("Danger zone") {
+                    Button("Delete My Account", role: .destructive) {
+                        showingDeleteConfirmation = true
+                    }
+                    .accessibilityIdentifier("settings.deleteAccount")
+                    Text("This permanently deletes your parent account. If you are the last parent, the family's children, loans, bills, payments, notifications, and device access are deleted too.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
                 }
-                .accessibilityIdentifier("settings.deleteAccount")
-                Text("This permanently deletes your parent account. If you are the last parent, the family's children, loans, bills, payments, notifications, and device access are deleted too.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+                Section { Button("Sign out", role: .destructive) { Task { await authSession.logout() } }.accessibilityIdentifier("settings.signOut") }
             }
-            Section { Button("Sign out", role: .destructive) { Task { await authSession.logout() } }.accessibilityIdentifier("settings.signOut") }
         }
         .navigationTitle("Settings")
         .task { await viewModel.load(service: environment.familyService) }

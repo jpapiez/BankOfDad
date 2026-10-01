@@ -8,19 +8,19 @@ final class InboxViewModel {
     var error: String?
     var isLoading = false
 
-    func load(service: NotificationService) async {
+    func load(service: any NotificationService) async {
         isLoading = true; defer { isLoading = false }
         do { notifications = try await service.notifications(); error = nil }
         catch { self.error = error.localizedDescription }
     }
 
-    func markRead(_ notification: AppNotification, service: NotificationService) async {
+    func markRead(_ notification: AppNotification, service: any NotificationService) async {
         guard notification.readAt == nil else { return }
         do { try await service.markRead(notification.id); if let index = notifications.firstIndex(where: { $0.id == notification.id }) { notifications[index].readAt = Date() } }
         catch { self.error = error.localizedDescription }
     }
 
-    func markAll(service: NotificationService) async {
+    func markAll(service: any NotificationService) async {
         do { try await service.markAllRead(); notifications = notifications.map { var copy = $0; copy.readAt = copy.readAt ?? Date(); return copy } }
         catch { self.error = error.localizedDescription }
     }

@@ -1,6 +1,6 @@
 import Foundation
 
-struct FamilyService: Sendable {
+struct LiveFamilyService: FamilyService {
     let api: APIClient
 
     func family() async throws -> FamilyDto { try await api.get("/family") }
@@ -12,20 +12,20 @@ struct FamilyService: Sendable {
     func invite(email: String?) async throws -> InviteResponse { try await api.post("/family/invites", body: InviteRequest(email: email)) }
 }
 
-struct LoanService: Sendable {
+struct LiveLoanService: LoanService {
     let api: APIClient
 
     func dashboard() async throws -> Dashboard { try await api.get("/dashboard") }
     func preview(_ input: LoanTermsInput) async throws -> SchedulePreview { try await api.post("/loans/preview", body: input) }
     func create(_ input: LoanTermsInput) async throws -> LoanDetail { try await api.post("/loans", body: input) }
-    func parentLoans(status: LoanStatus? = nil, childId: UUID? = nil) async throws -> [LoanSummary] {
+    func parentLoans(status: LoanStatus?, childId: UUID?) async throws -> [LoanSummary] {
         var query: [URLQueryItem] = []
         if let status, status != .unknown { query.append(URLQueryItem(name: "status", value: status.rawValue)) }
         if let childId { query.append(URLQueryItem(name: "childId", value: childId.uuidString)) }
         return try await api.get("/loans", queryItems: query)
     }
     func loan(_ id: UUID) async throws -> LoanDetail { try await api.get("/loans/\(id.uuidString)") }
-    func updateLoan(_ id: UUID, title: String? = nil, sendReminders: Bool? = nil, sendReceipts: Bool? = nil) async throws -> LoanDetail {
+    func updateLoan(_ id: UUID, title: String?, sendReminders: Bool?, sendReceipts: Bool?) async throws -> LoanDetail {
         try await api.patch("/loans/\(id.uuidString)", body: UpdateLoanRequest(title: title, sendReminders: sendReminders, sendReceipts: sendReceipts))
     }
     func updateInstallment(loanId: UUID, installmentId: UUID, dueDate: CalendarDate) async throws -> LoanDetail {
@@ -41,10 +41,10 @@ struct LoanService: Sendable {
     func myLoan(_ id: UUID) async throws -> LoanDetail { try await api.get("/me/loans/\(id.uuidString)") }
 }
 
-struct BillService: Sendable {
+struct LiveBillService: BillService {
     let api: APIClient
 
-    func bills(status: BillStatus? = nil, childId: UUID? = nil) async throws -> [BillSummary] {
+    func bills(status: BillStatus?, childId: UUID?) async throws -> [BillSummary] {
         var query: [URLQueryItem] = []
         if let status, status != .unknown { query.append(URLQueryItem(name: "status", value: status.rawValue)) }
         if let childId { query.append(URLQueryItem(name: "childId", value: childId.uuidString)) }
@@ -52,7 +52,7 @@ struct BillService: Sendable {
     }
     func bill(_ id: UUID) async throws -> BillDetail { try await api.get("/bills/\(id.uuidString)") }
     func create(_ input: BillInput) async throws -> BillDetail { try await api.post("/bills", body: input) }
-    func update(_ id: UUID, title: String? = nil, amount: Decimal? = nil, sendReminders: Bool? = nil, sendReceipts: Bool? = nil) async throws -> BillDetail {
+    func update(_ id: UUID, title: String?, amount: Decimal?, sendReminders: Bool?, sendReceipts: Bool?) async throws -> BillDetail {
         try await api.patch("/bills/\(id.uuidString)", body: UpdateBillRequest(title: title, amount: amount, sendReminders: sendReminders, sendReceipts: sendReceipts))
     }
     func end(_ id: UUID) async throws -> BillDetail { try await api.post("/bills/\(id.uuidString)/end") }
@@ -62,10 +62,10 @@ struct BillService: Sendable {
     func waiveFee(billId: UUID, lateFeeId: UUID) async throws -> BillDetail { try await api.post("/bills/\(billId.uuidString)/late-fees/\(lateFeeId.uuidString)/waive") }
 }
 
-struct NotificationService: Sendable {
+struct LiveNotificationService: NotificationService {
     let api: APIClient
 
-    func notifications(unreadOnly: Bool = false) async throws -> [AppNotification] {
+    func notifications(unreadOnly: Bool) async throws -> [AppNotification] {
         try await api.get("/notifications", queryItems: [URLQueryItem(name: "unreadOnly", value: unreadOnly ? "true" : "false")])
     }
     func markRead(_ id: UUID) async throws { try await api.sendNoResponse("POST", path: "/notifications/\(id.uuidString)/read") }

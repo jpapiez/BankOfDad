@@ -8,37 +8,37 @@ final class BillDetailViewModel {
     var isLoading = false
     var error: String?
 
-    func load(id: UUID, service: BillService) async {
+    func load(id: UUID, service: any BillService) async {
         isLoading = true; defer { isLoading = false }
         do { detail = try await service.bill(id); error = nil }
         catch { self.error = error.localizedDescription }
     }
 
-    func recordPayment(amount: Decimal, paidOn: CalendarDate, note: String?, service: BillService) async {
+    func recordPayment(amount: Decimal, paidOn: CalendarDate, note: String?, service: any BillService) async {
         guard let id = detail?.id else { return }
         do { _ = try await service.recordPayment(billId: id, amount: amount, paidOn: paidOn, note: note); detail = try await service.bill(id); error = nil }
         catch { self.error = error.localizedDescription }
     }
 
-    func update(title: String?, amount: Decimal?, service: BillService) async -> Bool {
+    func update(title: String?, amount: Decimal?, service: any BillService) async -> Bool {
         guard let id = detail?.id else { return false }
         do { detail = try await service.update(id, title: title, amount: amount); error = nil; return true }
         catch { self.error = error.localizedDescription; return false }
     }
 
-    func updateNotifications(service: BillService) async {
+    func updateNotifications(service: any BillService) async {
         guard let detail else { return }
         do { self.detail = try await service.update(detail.id, sendReminders: detail.sendReminders, sendReceipts: detail.sendReceipts); error = nil }
         catch { self.error = error.localizedDescription }
     }
 
-    func waive(lateFeeId: UUID, service: BillService) async {
+    func waive(lateFeeId: UUID, service: any BillService) async {
         guard let id = detail?.id else { return }
         do { detail = try await service.waiveFee(billId: id, lateFeeId: lateFeeId); error = nil }
         catch { self.error = error.localizedDescription }
     }
 
-    func end(service: BillService) async {
+    func end(service: any BillService) async {
         guard let id = detail?.id else { return }
         do { detail = try await service.end(id); error = nil }
         catch { self.error = error.localizedDescription }

@@ -107,6 +107,8 @@ final class APIClient: @unchecked Sendable {
     }
 
     func buildRequest<Response: Decodable>(for endpoint: APIEndpoint<Response>) async throws -> URLRequest {
+        // Demo mode is strictly offline: refuse to build a production request even if something tries.
+        guard !DemoIsolation.shared.isDemoActive else { throw APIError.demoModeNetworkBlocked }
         guard let url = APIClient.makeURL(baseURL: baseURL, path: endpoint.path, queryItems: endpoint.queryItems) else { throw APIError.invalidURL }
         var request = URLRequest(url: url)
         request.httpMethod = endpoint.method

@@ -9,7 +9,7 @@ final class LoanDetailViewModel {
     var error: String?
     var isKidMode = false
 
-    func load(id: UUID, service: LoanService, kidMode: Bool) async {
+    func load(id: UUID, service: any LoanService, kidMode: Bool) async {
         isKidMode = kidMode
         isLoading = true; defer { isLoading = false }
         do {
@@ -19,29 +19,29 @@ final class LoanDetailViewModel {
         catch { self.error = error.localizedDescription }
     }
 
-    func updateInstallment(loanId: UUID, installmentId: UUID, dueDate: CalendarDate, service: LoanService) async {
+    func updateInstallment(loanId: UUID, installmentId: UUID, dueDate: CalendarDate, service: any LoanService) async {
         do { detail = try await service.updateInstallment(loanId: loanId, installmentId: installmentId, dueDate: dueDate); error = nil }
         catch { self.error = error.localizedDescription }
     }
 
-    func recordPayment(loanId: UUID, amount: Decimal, paidOn: CalendarDate, note: String?, service: LoanService) async {
+    func recordPayment(loanId: UUID, amount: Decimal, paidOn: CalendarDate, note: String?, service: any LoanService) async {
         do { _ = try await service.recordPayment(loanId: loanId, amount: amount, paidOn: paidOn, note: note); detail = try await service.loan(loanId); error = nil }
         catch { self.error = error.localizedDescription }
     }
 
-    func waive(lateFeeId: UUID, service: LoanService) async {
+    func waive(lateFeeId: UUID, service: any LoanService) async {
         guard let loanId = detail?.id else { return }
         do { detail = try await service.waiveFee(loanId: loanId, lateFeeId: lateFeeId); error = nil }
         catch { self.error = error.localizedDescription }
     }
 
-    func cancel(service: LoanService) async {
+    func cancel(service: any LoanService) async {
         guard let id = detail?.id else { return }
         do { detail = try await service.cancel(id); error = nil }
         catch { self.error = error.localizedDescription }
     }
 
-    func updateNotifications(service: LoanService) async {
+    func updateNotifications(service: any LoanService) async {
         guard let detail else { return }
         do { self.detail = try await service.updateLoan(detail.id, sendReminders: detail.sendReminders, sendReceipts: detail.sendReceipts); error = nil }
         catch { self.error = error.localizedDescription }

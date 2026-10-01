@@ -2,6 +2,7 @@ import SwiftUI
 
 @MainActor
 struct KidSettingsView: View {
+    @Environment(AppEnvironment.self) private var environment
     @Environment(AuthSession.self) private var authSession
 
     var body: some View {
@@ -14,7 +15,11 @@ struct KidSettingsView: View {
                         .foregroundStyle(.secondary)
                 }
             }
-            Section { Button("Sign out", role: .destructive) { Task { await authSession.logout() } }.accessibilityIdentifier("kidSettings.signOut") }
+            if environment.isDemo {
+                DemoSettingsSection()
+            } else {
+                Section { Button("Sign out", role: .destructive) { Task { await authSession.logout() } }.accessibilityIdentifier("kidSettings.signOut") }
+            }
         }
         .navigationTitle("Settings")
     }
