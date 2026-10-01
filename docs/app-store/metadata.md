@@ -51,11 +51,9 @@ Select **Data Used to Track You: No**. Do not select advertising, analytics, sal
 
 > Bank of Dad is intended for unlisted distribution to a specific family and should not appear in public search or charts. Please evaluate the submitted build as an Unlisted App.
 >
-> **[DEPENDENT ON #25 — replace before submission]** The submitted build includes **Explore Demo**, which is offline/local and does not contact the production family service. From the welcome screen, choose Explore Demo. Use the role switcher to inspect the parent and kid views. No real family or financial data is included.
+> The submitted build includes a fully local, offline **Explore Demo** that does not contact the production family service and contains no real family or financial data. From **Welcome**, choose **Explore Demo**, then **Explore as a parent**. Tap the persistent **Demo mode** banner to switch between the parent experience and the kid experiences for **Maya** or **Theo**.
 >
 > Production family access uses the family's private Tailscale service and requires configured access or an invitation. Review does not need production credentials because the demo is self-contained.
-
-**Demo dependency:** issue #25 must land before the demo paragraph is used in App Store Connect. Replace the placeholder with the verified entry point and role-switching steps from the final screenshot build; do not claim demo-mode behavior before then.
 
 ## Screenshots
 
