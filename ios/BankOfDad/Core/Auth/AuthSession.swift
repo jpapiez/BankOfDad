@@ -83,6 +83,11 @@ final class AuthSession {
         await signOutLocal()
     }
 
+    func deleteAccount() async throws {
+        try await apiClient.deleteAccount()
+        await signOutLocal()
+    }
+
     func signOutLocal() async {
         try? keychain.deleteTokens()
         await vault.clear()

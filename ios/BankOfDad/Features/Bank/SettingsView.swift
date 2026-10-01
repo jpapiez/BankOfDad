@@ -25,6 +25,7 @@ struct SettingsView: View {
     @Environment(AppEnvironment.self) private var environment
     @Environment(AuthSession.self) private var authSession
     @State private var viewModel = SettingsViewModel()
+    @State private var showingDeleteConfirmation = false
 
     var body: some View {
         Form {
@@ -46,9 +47,32 @@ struct SettingsView: View {
                 Button("Save changes") { Task { await viewModel.save(service: environment.familyService) } }
                     .accessibilityIdentifier("settings.save")
             }
+            Section("Danger zone") {
+                Button("Delete My Account", role: .destructive) {
+                    showingDeleteConfirmation = true
+                }
+                .accessibilityIdentifier("settings.deleteAccount")
+                Text("This permanently deletes your parent account. If you are the last parent, the family's children, loans, bills, payments, notifications, and device access are deleted too.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
             Section { Button("Sign out", role: .destructive) { Task { await authSession.logout() } }.accessibilityIdentifier("settings.signOut") }
         }
         .navigationTitle("Settings")
         .task { await viewModel.load(service: environment.familyService) }
+        .confirmationDialog("Delete your account?", isPresented: $showingDeleteConfirmation, titleVisibility: .visible) {
+            Button("Delete My Account", role: .destructive) {
+                Task {
+                    do {
+                        try await authSession.deleteAccount()
+                    } catch {
+                        viewModel.error = error.localizedDescription
+                    }
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This cannot be undone. Your sign-in credentials and tokens will be revoked. If you are the last parent, all private family data will be permanently deleted.")
+        }
     }
 }

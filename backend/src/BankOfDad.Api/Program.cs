@@ -1,3 +1,4 @@
+using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Data;
 using System.Net.Sockets;
@@ -59,6 +60,7 @@ builder.Services.AddSingleton<IClock, SystemClock>();
 builder.Services.AddScoped<IPasswordService, PasswordService>();
 builder.Services.AddScoped<IAppleTokenValidator, AppleTokenValidator>();
 builder.Services.AddScoped<AuthService>();
+builder.Services.AddScoped<AccountDeletionService>();
 builder.Services.AddScoped<NotificationService>();
 builder.Services.AddScoped<LoanSweeper>();
 if (string.IsNullOrWhiteSpace(builder.Configuration["Apns:KeyId"]))
@@ -87,6 +89,24 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJw
         ClockSkew = TimeSpan.FromSeconds(30),
         RoleClaimType = "role",
         NameClaimType = "name"
+    };
+    options.Events = new JwtBearerEvents
+    {
+        OnTokenValidated = async context =>
+        {
+            var subject = context.Principal?.FindFirstValue(JwtRegisteredClaimNames.Sub);
+            if (!Guid.TryParse(subject, out var userId))
+            {
+                context.Fail("Invalid subject claim.");
+                return;
+            }
+
+            var db = context.HttpContext.RequestServices.GetRequiredService<BankOfDadDbContext>();
+            if (!await db.Users.AnyAsync(x => x.Id == userId, context.HttpContext.RequestAborted).ConfigureAwait(false))
+            {
+                context.Fail("Account no longer exists.");
+            }
+        }
     };
 });
 builder.Services.AddAuthorization(options =>
@@ -234,6 +254,12 @@ auth.MapGet("/me", async (ClaimsPrincipal user, BankOfDadDbContext db, Cancellat
     var current = await db.Users.FindAsync([user.UserId()], ct);
     return current is null ? Results.NotFound() : Results.Ok(DtoMapper.User(current));
 }).RequireAuthorization();
+
+api.MapDelete("/account", async (ClaimsPrincipal user, AccountDeletionService deletion, CancellationToken ct) =>
+{
+    await deletion.DeleteParentAsync(user.UserId(), ct);
+    return Results.NoContent();
+}).RequireAuthorization("Parent");
 
 var familyGroup = api.MapGroup("/family").RequireAuthorization("Parent");
 familyGroup.MapGet("/", async (ClaimsPrincipal user, BankOfDadDbContext db, IClock clock, CancellationToken ct) => Results.Ok(await GetFamilyDto(user.FamilyId(), db, clock, ct)));

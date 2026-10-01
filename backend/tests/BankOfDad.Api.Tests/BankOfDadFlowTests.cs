@@ -144,6 +144,62 @@ public sealed class BankOfDadFlowTests : IAsyncLifetime
         cancelled.Status.Should().Be(LoanStatus.Cancelled);
     }
 
+    [Fact]
+    public async Task Deleting_last_parent_removes_the_family_and_revokes_tokens_transactionally()
+    {
+        var parent = await Post<AuthResponse>("/api/v1/auth/register", new RegisterRequest("delete@example.com", "Password123!", "Delete Me", "Delete Family", "America/Los_Angeles"), HttpStatusCode.Created);
+        Use(parent.AccessToken);
+        var child = await Post<ChildDto>("/api/v1/family/children", new ChildRequest("Child", "#4F8EF7"), HttpStatusCode.Created);
+        await Post<LoanDetailDto>("/api/v1/loans", NewTerms(child.Id, new DateOnly(2026, 11, 1)), HttpStatusCode.Created);
+        await Post<BillDetailDto>("/api/v1/bills", new BillInput(child.Id, "Phone", 25m, Frequency.Monthly, new DateOnly(2026, 11, 1), null, null, 0, true, true), HttpStatusCode.Created);
+        await _client.PostAsJsonAsync("/api/v1/devices", new DeviceRequest("delete-device", "sandbox"), Json);
+
+        var deleted = await _client.DeleteAsync("/api/v1/account");
+        deleted.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        Use(parent.AccessToken);
+        (await _client.GetAsync("/api/v1/family")).StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+        Use(null);
+
+        (await _client.PostAsJsonAsync("/api/v1/auth/refresh", new RefreshRequest(parent.RefreshToken), Json)).StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<BankOfDadDbContext>();
+        (await db.Families.CountAsync(x => x.Id == parent.User.FamilyId)).Should().Be(0);
+        (await db.Users.CountAsync(x => x.FamilyId == parent.User.FamilyId)).Should().Be(0);
+        (await db.Loans.CountAsync(x => x.FamilyId == parent.User.FamilyId)).Should().Be(0);
+        (await db.Bills.CountAsync(x => x.FamilyId == parent.User.FamilyId)).Should().Be(0);
+        (await db.RefreshTokens.AnyAsync(x => x.UserId == parent.User.Id)).Should().BeFalse();
+        (await db.DeviceTokens.AnyAsync(x => x.UserId == parent.User.Id)).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Deleting_one_parent_preserves_shared_family_data_and_other_parent_access()
+    {
+        var parent = await Post<AuthResponse>("/api/v1/auth/register", new RegisterRequest("first@example.com", "Password123!", "First", "Shared Family", "America/Los_Angeles"), HttpStatusCode.Created);
+        Use(parent.AccessToken);
+        var invite = await Post<InviteResponse>("/api/v1/family/invites", new InviteRequest("second@example.com"), HttpStatusCode.Created);
+        var child = await Post<ChildDto>("/api/v1/family/children", new ChildRequest("Child", null), HttpStatusCode.Created);
+        var loan = await Post<LoanDetailDto>("/api/v1/loans", NewTerms(child.Id, new DateOnly(2026, 11, 1)), HttpStatusCode.Created);
+        Use(null);
+        var other = await Post<AuthResponse>("/api/v1/auth/accept-invite", new AcceptInviteRequest(invite.InviteCode, "second@example.com", "Password123!", "Second"), HttpStatusCode.Created);
+
+        Use(parent.AccessToken);
+        var deleted = await _client.DeleteAsync("/api/v1/account");
+        deleted.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        Use(null);
+        (await _client.PostAsJsonAsync("/api/v1/auth/refresh", new RefreshRequest(parent.RefreshToken), Json)).StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+
+        Use(other.AccessToken);
+        var family = await Get<FamilyDto>("/api/v1/family");
+        family.Parents.Should().ContainSingle(x => x.Id == other.User.Id);
+        (await Get<LoanDetailDto>($"/api/v1/loans/{loan.Id}")).Id.Should().Be(loan.Id);
+
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<BankOfDadDbContext>();
+        (await db.Users.CountAsync(x => x.FamilyId == other.User.FamilyId && x.Role == Role.Parent)).Should().Be(1);
+        (await db.Loans.CountAsync(x => x.Id == loan.Id)).Should().Be(1);
+        (await db.Loans.Where(x => x.Id == loan.Id).Select(x => x.CreatedByParentId).SingleAsync()).Should().Be(other.User.Id);
+    }
+
     private async Task<Guid> CreateOtherFamilyLoan()
     {
         Use(null);
