@@ -12,28 +12,28 @@ final class FamilyViewModel {
     var isLoading = false
     var error: String?
 
-    func load(service: FamilyService) async {
+    func load(service: any FamilyService) async {
         isLoading = true; defer { isLoading = false }
         do { family = try await service.family(); error = nil }
         catch { self.error = error.localizedDescription }
     }
 
-    func addChild(name: String, color: String, service: FamilyService) async {
+    func addChild(name: String, color: String, service: any FamilyService) async {
         do { _ = try await service.addChild(displayName: name, avatarColor: color); await load(service: service) }
         catch { self.error = error.localizedDescription }
     }
 
-    func generatePairing(childId: UUID, service: FamilyService) async {
+    func generatePairing(childId: UUID, service: any FamilyService) async {
         do { pairing = try await service.pairingCode(childId: childId); error = nil }
         catch { self.error = error.localizedDescription }
     }
 
-    func revokeDevices(childId: UUID, service: FamilyService) async {
+    func revokeDevices(childId: UUID, service: any FamilyService) async {
         do { try await service.revokeDevices(childId: childId); await load(service: service) }
         catch { self.error = error.localizedDescription }
     }
 
-    func invite(email: String?, service: FamilyService) async {
+    func invite(email: String?, service: any FamilyService) async {
         do { invite = try await service.invite(email: email?.isEmpty == true ? nil : email); error = nil }
         catch { self.error = error.localizedDescription }
     }

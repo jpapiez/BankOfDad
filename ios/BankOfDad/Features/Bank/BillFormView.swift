@@ -46,7 +46,7 @@ final class NewBillViewModel {
                          sendReceipts: sendReceipts)
     }
 
-    func loadFamily(service: FamilyService) async {
+    func loadFamily(service: any FamilyService) async {
         guard showsChildPicker, family == nil else { return }
         do {
             let value = try await service.family()
@@ -56,7 +56,7 @@ final class NewBillViewModel {
         } catch { self.error = error.localizedDescription }
     }
 
-    func create(service: BillService) async {
+    func create(service: any BillService) async {
         guard let input else { return }
         isSaving = true; defer { isSaving = false }
         do { createdBill = try await service.create(input); error = nil }

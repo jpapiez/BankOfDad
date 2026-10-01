@@ -39,6 +39,15 @@ struct WelcomeView: View {
                 .controlSize(.large)
                 .tint(Theme.kidAccent)
                 .accessibilityIdentifier("welcome.kid")
+
+                NavigationLink { DemoEntryView() } label: {
+                    Label("Explore Demo", systemImage: "sparkles")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.large)
+                .accessibilityIdentifier("welcome.demo")
+                .accessibilityHint("Explore the app with sample data. No account is needed.")
             }
             .padding(.horizontal)
             Spacer()

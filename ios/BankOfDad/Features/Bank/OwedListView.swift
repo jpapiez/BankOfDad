@@ -41,7 +41,7 @@ final class OwedListViewModel {
     var isEmpty: Bool { loans.isEmpty && bills.isEmpty }
     var currencyCode: String { family?.currency ?? "USD" }
 
-    func load(loans loanService: LoanService, bills billService: BillService, family familyService: FamilyService) async {
+    func load(loans loanService: any LoanService, bills billService: any BillService, family familyService: any FamilyService) async {
         isLoading = true; defer { isLoading = false }
         let filter = filter, childId = childId
         do {
@@ -57,12 +57,12 @@ final class OwedListViewModel {
         } catch { self.error = error.localizedDescription }
     }
 
-    private static func fetchLoans(filter: OwedFilter, childId: UUID?, service: LoanService) async throws -> [LoanSummary] {
+    private static func fetchLoans(filter: OwedFilter, childId: UUID?, service: any LoanService) async throws -> [LoanSummary] {
         guard let status = filter.loanStatus else { return [] }
         return try await service.parentLoans(status: status, childId: childId)
     }
 
-    private static func fetchBills(filter: OwedFilter, childId: UUID?, service: BillService) async throws -> [BillSummary] {
+    private static func fetchBills(filter: OwedFilter, childId: UUID?, service: any BillService) async throws -> [BillSummary] {
         switch filter {
         case .active:
             // An ended bill still belongs here while something on it is owed.

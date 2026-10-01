@@ -14,7 +14,7 @@ final class ChildDetailViewModel {
     var activeBills: [BillSummary] { bills.filter { $0.status == .active } }
     var endedBills: [BillSummary] { bills.filter { $0.status != .active } }
 
-    func load(childId: UUID, loanService: LoanService, billService: BillService) async {
+    func load(childId: UUID, loanService: any LoanService, billService: any BillService) async {
         isLoading = true; defer { isLoading = false }
         do {
             async let loans = loanService.parentLoans(childId: childId)

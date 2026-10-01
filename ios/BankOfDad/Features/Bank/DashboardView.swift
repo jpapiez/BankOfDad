@@ -8,7 +8,7 @@ final class DashboardViewModel {
     var isLoading = false
     var error: String?
 
-    func load(service: LoanService) async {
+    func load(service: any LoanService) async {
         isLoading = true; defer { isLoading = false }
         do { dashboard = try await service.dashboard(); error = nil }
         catch { self.error = error.localizedDescription }

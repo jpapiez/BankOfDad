@@ -11,7 +11,7 @@ xcodegen generate
 open BankOfDad.xcodeproj
 ```
 
-The app target is `BankOfDad`. Unit tests live in `BankOfDadTests`, and end-to-end UI tests live in `BankOfDadUITests` (see below). Swift is pinned to 5.10 to avoid strict concurrency surprises while still building cleanly in Xcode 16.
+The app target is `BankOfDad`. Unit tests live in `BankOfDadTests`, and end-to-end UI tests live in `BankOfDadUITests` (see below). `BankOfDadUITests/DemoModeUITests.swift` is the exception: it drives demo mode and needs no backend. Swift is pinned to 5.10 to avoid strict concurrency surprises while still building cleanly in Xcode 16.
 
 ## Running against the local backend
 
@@ -53,6 +53,36 @@ The script archives the Release configuration, signs it for App Store distributi
 - **Adults (no review):** add each person under Users and Access with the Developer or Marketing role. Individual memberships allow up to 50 users. Then add them to an **Internal Testing** group on the app's TestFlight tab. They accept the email invite in the TestFlight app. Internal builds install right away and expire after 90 days, so upload a new build before then.
 - **External testers:** create an **External Testing** group and invite by email or public link. The first build of each version goes through TestFlight App Review. Reviewers can't reach a tailnet-only server, so explain that in the review notes.
 - **Children:** Apple IDs for children under 13 may not be able to redeem TestFlight invites. For a child's phone, connect it to the Mac and run the app from Xcode instead. That needs Developer Mode on the phone, and the signing profile lasts a year.
+
+## Demo mode
+
+"Explore Demo" on the Welcome screen opens the whole app — the real screens and view models — against sample data that lives only in memory on the device. It needs no account, no backend, and no network, which makes it usable for App Review, for trying the app before pairing a kid's phone, and for App Store screenshots.
+
+How it works: every feature talks to the `FamilyService`, `LoanService`, `BillService` and `NotificationService` protocols in `Core/Services`. Normally `AppEnvironment` injects the `Live*` implementations that call the API; in demo mode it injects the `Demo*` implementations from `Core/Demo`, which are backed by one `DemoStore` actor wrapping the pure `DemoEngine`. The engine is a Swift port of the backend's loan and bill math, so balances, schedules, payment waterfalls, late fees and receipts behave exactly like the real thing.
+
+Isolation is enforced, not merely implied:
+
+- `APIClient` throws `APIError.demoModeNetworkBlocked` for any request raised while the demo is active, so no production call can escape.
+- `PushManager` never asks for notification authorization, and device registration is a no-op.
+- `AuthSession.beginDemo`/`endDemo` keep the demo user in memory; sign-out paths never touch the keychain, so leaving the demo cannot delete a real session.
+
+Sample data ("The Parkers") is deterministic and expressed relative to the current date: two children, an active loan with an overdue installment and a late fee, a paid-off loan, a loan that just started, two recurring bills with charge and payment history, and an Inbox of reminders, receipts and late-fee notices. Seeded payments are replayed through the engine in chronological order so every balance and receipt is internally consistent.
+
+In the demo a persistent banner sits above every screen. Tapping it (or the Demo section in Settings) switches between the parent and each kid, resets the data, or exits back to Welcome.
+
+### Launch arguments (screenshots and UI tests)
+
+| Argument | Effect |
+|---|---|
+| `-DemoMode` | Launches straight into the demo, skipping Welcome. |
+| `-DemoRole parent\|kid` | Which side to open. Defaults to `parent`. |
+| `-DemoDate YYYY-MM-DD` | Pins "today", so a run renders byte-identical content. |
+
+Unlike `-UITests`, these work in Release builds too, because the demo is a shipping feature.
+
+```sh
+xcrun simctl launch --console booted com.example.bankofdad -DemoMode -DemoRole kid -DemoDate 2026-03-14
+```
 
 ## Push notifications
 

@@ -3,6 +3,7 @@ import SwiftUI
 struct RootView: View {
     @Environment(AuthSession.self) private var authSession
     @Environment(AppEnvironment.self) private var environment
+    @State private var showingDemoOptions = false
 
     var body: some View {
         Group {
@@ -23,11 +24,22 @@ struct RootView: View {
                 if user.role == .parent { ParentRootView() } else { KidRootView() }
             }
         }
+        .safeAreaInset(edge: .top, spacing: 0) {
+            if environment.isDemo {
+                DemoBanner { showingDemoOptions = true }
+            }
+        }
+        .sheet(isPresented: $showingDemoOptions) { DemoOptionsSheet() }
+        .onChange(of: environment.isDemo) { _, isDemo in
+            if !isDemo { showingDemoOptions = false }
+        }
         .task(id: authSession.currentUser?.id) {
             guard authSession.currentUser != nil else { return }
             // A pairing link only applies to a signed-out device, so never let one linger past sign-in
             // (it would otherwise auto-pair on the next sign-out).
             environment.router.pendingPairingCode = nil
+            // Demo mode is offline and must never raise the system push prompt.
+            guard !environment.isDemo else { return }
             await environment.pushManager.requestAuthorizationAndRegister()
         }
     }

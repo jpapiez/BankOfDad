@@ -21,11 +21,11 @@ final class AppRouter {
 @MainActor
 final class PushManager: NSObject, UNUserNotificationCenterDelegate {
     static weak var shared: PushManager?
-    private let notificationService: NotificationService
+    private let notificationService: any NotificationService
     private let router: AppRouter
     private var latestToken: String?
 
-    init(notificationService: NotificationService, router: AppRouter) {
+    init(notificationService: any NotificationService, router: AppRouter) {
         self.notificationService = notificationService
         self.router = router
         super.init()
@@ -35,6 +35,8 @@ final class PushManager: NSObject, UNUserNotificationCenterDelegate {
 
     func requestAuthorizationAndRegister() async {
         guard !UITestHooks.skipPushRegistration else { return }
+        // Demo mode must never show the system push prompt or register a device.
+        guard !DemoIsolation.shared.isDemoActive else { return }
         do {
             let granted = try await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound])
             guard granted else { return }

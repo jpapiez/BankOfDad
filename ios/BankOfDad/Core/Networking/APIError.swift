@@ -14,6 +14,8 @@ enum APIError: LocalizedError, Equatable, Sendable {
     case unauthorized
     case decoding(String)
     case transport(String)
+    /// Raised when something tries to reach the production API while demo mode is active.
+    case demoModeNetworkBlocked
 
     var errorDescription: String? {
         switch self {
@@ -23,6 +25,7 @@ enum APIError: LocalizedError, Equatable, Sendable {
         case .unauthorized: return "Your session expired. Please sign in again."
         case .decoding(let message): return "Could not read the server response: \(message)"
         case .transport(let message): return message
+        case .demoModeNetworkBlocked: return "Demo mode works offline, so this request was not sent."
         }
     }
 }

@@ -18,6 +18,8 @@ final class AuthSession {
     private(set) var state: State = .loading
     private(set) var currentUser: UserDto?
     private(set) var isAuthenticating = false
+    /// True while the app is exploring sample data. Demo sessions never read or write the keychain.
+    private(set) var isDemo = false
     var errorMessage: String?
 
     init(apiClient: APIClient, keychain: KeychainStore, vault: TokenVault) {
@@ -75,6 +77,10 @@ final class AuthSession {
     }
 
     func logout() async {
+        if isDemo {
+            await endDemo()
+            return
+        }
         let tokens = await vault.tokens()
         let refresh = tokens.refresh
         if let refresh {
@@ -88,7 +94,27 @@ final class AuthSession {
         await signOutLocal()
     }
 
+    /// Signs the UI into a sample identity without ever touching the keychain or the token vault.
+    func beginDemo(user: UserDto) async {
+        isDemo = true
+        errorMessage = nil
+        currentUser = user
+        state = .authenticated(user)
+    }
+
+    /// Leaves demo mode and returns to the signed-out screen, again without touching stored tokens.
+    func endDemo() async {
+        isDemo = false
+        currentUser = nil
+        errorMessage = nil
+        state = .signedOut
+    }
+
     func signOutLocal() async {
+        if isDemo {
+            await endDemo()
+            return
+        }
         try? keychain.deleteTokens()
         await vault.clear()
         currentUser = nil

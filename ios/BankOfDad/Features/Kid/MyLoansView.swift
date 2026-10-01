@@ -14,7 +14,7 @@ final class MyLoansViewModel {
         loans.filter { $0.status == .active }.reduce(0) { $0 + $1.balance } + bills.reduce(0) { $0 + $1.balance }
     }
 
-    func load(service: LoanService, billService: BillService) async {
+    func load(service: any LoanService, billService: any BillService) async {
         isLoading = true; defer { isLoading = false }
         do {
             async let loans = service.myLoans()
