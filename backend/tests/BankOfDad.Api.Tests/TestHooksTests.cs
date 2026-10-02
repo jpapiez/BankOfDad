@@ -180,6 +180,7 @@ public sealed class TestHooksTests : IAsyncLifetime
             {
                 ["ConnectionStrings:Default"] = connectionString,
                 ["Apple:ClientId"] = "com.example.bankofdad",
+                ["Onboarding:LegacyRegistrationEnabled"] = "true",
                 ["TestHooks:Enabled"] = hooksEnabled
             }));
             builder.ConfigureServices(services =>

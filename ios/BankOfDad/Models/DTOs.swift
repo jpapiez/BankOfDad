@@ -305,4 +305,31 @@ extension PairingCodeResponse: Identifiable {
 struct InviteResponse: Codable, Hashable, Sendable {
     let inviteCode: String
     let expiresAt: Date
+    var qrPayload: String? = nil
+}
+
+struct EnrollmentInspectRequest: Encodable { let token: String }
+struct BootstrapCompleteRequest: Encodable {
+    let token: String
+    let email: String
+    let password: String
+    let displayName: String
+    let familyName: String
+    let timeZone: String
+}
+enum ChildCredentialKind: String, Codable, CaseIterable, Sendable {
+    case password
+    case pin
+}
+struct ChildEnrollmentRequest: Encodable {
+    let token: String
+    let username: String
+    let secret: String
+    let credentialKind: ChildCredentialKind
+    let deviceName: String?
+}
+struct ChildLoginRequest: Encodable {
+    let username: String
+    let secret: String
+    let deviceName: String?
 }

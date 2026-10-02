@@ -1,0 +1,33 @@
+{
+  "goal_id": "ship-self-hosted-beta",
+  "status": "ready_for_inspection",
+  "iteration": 1,
+  "builder_model": "GPT:5.6-Luna",
+  "inspector_model": "GPT:5.6-Sol",
+  "initial_sha": "44ecfd4324a18250f78cd6e4eb574c2ce88e5827",
+  "created_at": "2026-10-02T20:24:28Z",
+  "history": [
+    {
+      "iteration": 1,
+      "status": "ready_for_inspection",
+      "completed_at": "2026-10-02T22:05:00Z",
+      "quality_gates": {
+        "backend_restore": "passed",
+        "backend_release_build_warnings_as_errors": "passed: 0 warnings, 0 errors",
+        "backend_tests": "passed: 77 tests",
+        "docker_build": "passed",
+        "docker_health": "passed: Healthy",
+        "ios_project_generation": "passed",
+        "ios_unit_tests": "passed",
+        "ios_onboarding_ui_tests": "passed: 10 tests",
+        "ios_complete_ui_suite": "passed: 71 tests"
+      },
+      "release": {
+        "build_number": "20261002.2202",
+        "signed_archive_export": "passed",
+        "app_store_connect_upload": "succeeded; package is processing",
+        "beta_review_submission": "not submitted; awaiting explicit user confirmation"
+      }
+    }
+  ]
+}

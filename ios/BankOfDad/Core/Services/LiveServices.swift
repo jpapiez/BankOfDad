@@ -7,9 +7,9 @@ struct LiveFamilyService: FamilyService {
     func updateFamily(name: String?, timeZone: String?) async throws -> FamilyDto { try await api.patch("/family", body: UpdateFamilyRequest(name: name, timeZone: timeZone)) }
     func addChild(displayName: String, avatarColor: String?) async throws -> ChildDto { try await api.post("/family/children", body: ChildRequest(displayName: displayName, avatarColor: avatarColor)) }
     func updateChild(_ childId: UUID, displayName: String?, avatarColor: String?) async throws -> ChildDto { try await api.patch("/family/children/\(childId.uuidString)", body: ChildRequest(displayName: displayName, avatarColor: avatarColor)) }
-    func pairingCode(childId: UUID) async throws -> PairingCodeResponse { try await api.post("/family/children/\(childId.uuidString)/pairing-code") }
+    func pairingCode(childId: UUID) async throws -> PairingCodeResponse { try await api.post("/family/children/\(childId.uuidString)/enrollment") }
     func revokeDevices(childId: UUID) async throws { try await api.delete("/family/children/\(childId.uuidString)/devices") }
-    func invite(email: String?) async throws -> InviteResponse { try await api.post("/family/invites", body: InviteRequest(email: email)) }
+    func invite(email: String?) async throws -> InviteResponse { try await api.post("/family/invites/enrollment", body: InviteRequest(email: email)) }
 }
 
 struct LiveLoanService: LoanService {

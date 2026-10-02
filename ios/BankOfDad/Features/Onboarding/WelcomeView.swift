@@ -1,8 +1,9 @@
 import SwiftUI
 
 struct WelcomeView: View {
+    @Environment(AppEnvironment.self) private var environment
     @Environment(AppRouter.self) private var router
-    @State private var showingKidPairing = false
+    @State private var showingServerConnection = false
 
     var body: some View {
         VStack(spacing: 28) {
@@ -15,11 +16,16 @@ struct WelcomeView: View {
                 Text("Bank of Dad")
                     .font(.largeTitle.bold())
                     .multilineTextAlignment(.center)
-                Text("A friendly family ledger for loans, reminders, receipts, and payback progress.")
+                Text(environment.serverProfile?.familyName ?? "A friendly family ledger for loans, reminders, receipts, and payback progress.")
                     .font(.body)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal)
+                if let origin = environment.serverProfile?.origin {
+                    Label(origin.host ?? origin.absoluteString, systemImage: origin.scheme == "https" ? "lock.fill" : "exclamationmark.triangle.fill")
+                        .font(.caption)
+                        .foregroundStyle(origin.scheme == "https" ? Color.secondary : Color.orange)
+                }
             }
             VStack(spacing: 14) {
                 NavigationLink { ParentSignInView() } label: {
@@ -31,7 +37,7 @@ struct WelcomeView: View {
                 .tint(Theme.bankAccent)
                 .accessibilityIdentifier("welcome.parent")
 
-                Button { showingKidPairing = true } label: {
+                NavigationLink { ChildSignInView() } label: {
                     Label("I'm a Kid", systemImage: "sparkles")
                         .frame(maxWidth: .infinity)
                 }
@@ -39,6 +45,15 @@ struct WelcomeView: View {
                 .controlSize(.large)
                 .tint(Theme.kidAccent)
                 .accessibilityIdentifier("welcome.kid")
+
+                Button {
+                    showingServerConnection = true
+                } label: {
+                    Label("Scan an Invitation", systemImage: "qrcode.viewfinder")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .accessibilityIdentifier("welcome.invitation")
 
                 NavigationLink { DemoEntryView() } label: {
                     Label("Explore Demo", systemImage: "sparkles")
@@ -55,13 +70,32 @@ struct WelcomeView: View {
         .navigationTitle("Welcome")
         .navigationBarTitleDisplayMode(.inline)
         .background(Color(.systemGroupedBackground))
-        .navigationDestination(isPresented: $showingKidPairing) { KidPairingView() }
-        // A pairing link (e.g. the parent's QR code opened by the Camera app) jumps straight to pairing.
-        .onAppear { if router.pendingPairingCode != nil { showingKidPairing = true } }
-        .onChange(of: router.pendingPairingCode) { _, newValue in
-            if newValue != nil { showingKidPairing = true }
+        .sheet(isPresented: $showingServerConnection) {
+            NavigationStack {
+                ConnectServerView()
+                    .padding()
+                    .navigationTitle("Connect Server")
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Cancel") { showingServerConnection = false }
+                        }
+                    }
+            }
+        }
+        .onAppear(perform: consumePendingConnection)
+        .onChange(of: router.pendingServerConnection) { _, _ in consumePendingConnection() }
+        .onChange(of: router.pendingEnrollment) { _, enrollment in
+            if enrollment != nil {
+                showingServerConnection = false
+            }
+        }
+    }
+
+    private func consumePendingConnection() {
+        if router.pendingServerConnection != nil {
+            showingServerConnection = true
         }
     }
 }
 
-#Preview { NavigationStack { WelcomeView() }.environment(AppRouter()) }
+#Preview { NavigationStack { WelcomeView() }.environment(AppEnvironment()).environment(AppRouter()) }

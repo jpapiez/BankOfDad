@@ -3,7 +3,7 @@ import SwiftUI
 @MainActor
 struct KidSettingsView: View {
     @Environment(AppEnvironment.self) private var environment
-    @Environment(AuthSession.self) private var authSession
+    private var authSession: AuthSession { environment.authSession }
 
     var body: some View {
         Form {
@@ -18,6 +18,7 @@ struct KidSettingsView: View {
             if environment.isDemo {
                 DemoSettingsSection()
             } else {
+                ServerSettingsSection()
                 Section { Button("Sign out", role: .destructive) { Task { await authSession.logout() } }.accessibilityIdentifier("kidSettings.signOut") }
             }
         }

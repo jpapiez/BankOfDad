@@ -13,11 +13,13 @@ open BankOfDad.xcodeproj
 
 The app target is `BankOfDad`. Unit tests live in `BankOfDadTests`, and end-to-end UI tests live in `BankOfDadUITests` (see below). `BankOfDadUITests/DemoModeUITests.swift` is the exception: it drives demo mode and needs no backend. Swift is pinned to 5.10 to avoid strict concurrency surprises while still building cleanly in Xcode 16.
 
-## Running against the local backend
+## Connecting to a backend
 
-1. From the repository root, start the backend stack with Docker according to the root README/backend instructions.
-2. In Xcode, run the app on an iOS 17 simulator. The default `API_BASE_URL` build setting is `http://localhost:8080`, and the simulator can reach that directly.
-3. To use another backend, for example the [Tailscale-hosted server](../deploy/README.md) on a physical device, copy `Config/Local.xcconfig.example` to `Config/Local.xcconfig` (gitignored) and set `API_BASE_URL = https:/$()/bankofdad.<tailnet>.ts.net`. The next build uses it. `API_BASE_URL` defaults to `http://localhost:8080` in `Config/App.xcconfig`. App Transport Security only allows plain HTTP to `localhost` and `127.0.0.1`, so remote servers must use HTTPS, which the Tailscale setup provides.
+Production users select their family server at runtime. A fresh deployment prints a one-time setup code; its root page turns that code into a short-lived setup QR. Later co-parent and child invitations use the same versioned connection envelope with the server origin, stable installation ID, intended role, and a short-lived single-use token.
+
+The app always fetches `/.well-known/bankofdad`, verifies that the descriptor's canonical origin and installation ID match the QR, and shows a confirmation before saving the profile. Tokens and server identity are stored together in the Keychain so credentials cannot be sent to another server.
+
+For local development, `API_BASE_URL` remains a Debug/UI-test seed profile. The app verifies the descriptor before importing it. Public HTTP is rejected. HTTP is accepted only for loopback, `.local`, link-local, and private IP addresses and shows a prominent warning; HTTPS uses normal iOS certificate validation.
 
 ## Install on family devices (TestFlight)
 
@@ -32,7 +34,7 @@ TestFlight installs the app on real iPhones without an App Store listing. You ne
 2. **Xcode:** sign in under Xcode > Settings > Accounts. If your team has never had a device registered, connect your iPhone and run the app from Xcode once first. Archiving needs a development profile, and Apple only issues one when the team has at least one device.
 3. **Register the bundle ID:** run `UPLOAD=0 ./scripts/testflight.sh` once. Xcode's automatic signing registers the ID with the Sign in with Apple and Push Notifications capabilities.
 4. **App Store Connect:** under Apps, click + > New App. Choose iOS, pick your bundle ID, and enter any SKU. The name must be unique across the App Store, but the home-screen name stays "Bank of Dad".
-5. **Server:** set `APPLE_CLIENT_ID` and `APNS_BUNDLE_ID` to the bundle ID. Configure `APPLE_TEAM_ID`, `APPLE_KEY_ID`, `APPLE_KEY_PATH`, and a stable 32-byte base64 `APPLE_TOKEN_ENCRYPTION_KEY` so authorization codes can be exchanged, Apple refresh tokens encrypted at rest, and Sign in with Apple authorization revoked during account deletion. Install the Sign in with Apple `.p8` at the configured path. For push, configure its Apple private key, `APNS_KEY_ID`, and `APNS_TEAM_ID`. Set `APNS_USE_SANDBOX=false`, because TestFlight builds register production push tokens.
+5. **Server:** ordinary public self-hosted servers need no Apple private keys. Their descriptor hides Sign in with Apple, skips APNs registration, and keeps reminders/receipts in Inbox. Only an official/custom server may configure matching Sign in with Apple and APNs keys for this app ID.
 
 ### Upload a build
 
@@ -40,7 +42,7 @@ TestFlight installs the app on real iPhones without an App Store listing. You ne
 ./scripts/testflight.sh
 ```
 
-The script archives the Release configuration, signs it for App Store distribution and uploads it. The build number is the UTC time (`YYYYMMDD.HHMM`), so each upload is newer than the last. The build appears under TestFlight after processing, which usually takes 5 to 15 minutes. It refuses to run with the placeholder bundle ID, without a team, or with a non-HTTPS `API_BASE_URL`.
+The script archives the Release configuration, signs it for App Store distribution and uploads it. The build number is the UTC time (`YYYYMMDD.HHMM`), so each upload is newer than the last. The build appears under TestFlight after processing, which usually takes 5 to 15 minutes. It refuses to run with the placeholder bundle ID or without a team; the family server is selected at runtime.
 
 | Variable | Purpose |
 |---|---|
@@ -84,13 +86,19 @@ Unlike `-UITests`, these work in Release builds too, because the demo is a shipp
 xcrun simctl launch --console booted com.example.bankofdad -DemoMode -DemoRole kid -DemoDate 2026-03-14
 ```
 
-## Push notifications
+## Apple and push capabilities
 
-`BankOfDad.entitlements` enables Sign in with Apple, APNs (development; distribution signing switches it to production), and remote-notification background mode. Configure an Apple developer team, App ID, APNs key/certificate, and backend push provider before testing device push. APNs registration is skipped until a user is authenticated; tokens are posted to `/api/v1/devices` as sandbox in Debug and production otherwise.
+`BankOfDad.entitlements` permits Sign in with Apple and APNs, but the connected server descriptor controls whether either feature appears. Public self-hosted servers normally advertise neither because distributing the App Store owner's private Apple keys would be unsafe. When push is unsupported, iOS never requests notification permission and Inbox continues to work.
 
-## Pairing notes
+## Enrollment notes
 
-Parents generate pairing codes from Family > Pair Child. Kids can type the code, scan the QR code, or open `bankofdad://pair?code=...`. Dashes/spaces are stripped and input is uppercased before calling `/api/v1/auth/pair`.
+Connection links use `bankofdad://connect?v=1&origin=…&server=…&kind=…&token=…`. QR codes never contain a password, PIN, access token, or refresh token.
+
+- Bootstrap creates the server's one family and first parent.
+- Co-parent enrollment selects the server and creates an email/password account.
+- Child enrollment is bound to an existing child and creates a unique username with either a password or numeric PIN.
+- Generating a new child enrollment revokes existing child sessions and supersedes older unused enrollment links.
+- Returning children sign in with username/password or username/PIN; there is no passwordless production pairing.
 
 ## End-to-end UI tests
 

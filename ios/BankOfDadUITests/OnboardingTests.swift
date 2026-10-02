@@ -61,54 +61,50 @@ final class OnboardingTests: BankUITestCase {
         XCTAssertTrue(element("signIn.submit").exists, "Still on the sign-in form")
     }
 
-    func testSignInWithAppleButtonIsOffered() {
-        // Sign in with Apple needs a real Apple ID round-trip, so only its presence is verified.
+    func testSignInWithAppleIsHiddenWhenServerDoesNotAdvertiseIt() {
         launch()
         element("welcome.parent").waitToAppear(timeout: 15).tap()
-        XCTAssertTrue(element("signIn.apple").waitForExistence(timeout: 5))
+        XCTAssertFalse(element("signIn.apple").exists)
     }
 
-    func testCoParentJoinsWithAnInviteCode() throws {
+    func testCoParentJoinsWithAnEnrollmentLink() throws {
         let parent = try api.registerParent(name: "Inviter")
-        let invite = try api.invite(parent)
-        launch()
-        element("welcome.parent").waitToAppear(timeout: 15).tap()
-        element("signIn.toggleInvite").waitToAppear().tap()
-        XCTAssertEqual(element("signIn.submit").label, "Accept invite")
-
         let email = TestAPI.uniqueEmail("coparent")
-        element("signIn.email").replaceText(email)
-        element("signIn.password").replaceText(TestAPI.password)
-        element("signIn.displayName").replaceText("Co Parent")
-        element("signIn.inviteCode").replaceText(invite.inviteCode.lowercased())
-        XCTAssertTrue(element("signIn.inviteCode").stringValue.contains("-"), "Invite code is display-formatted with dashes")
-        element("signIn.submit").tap()
+        let invite = try api.parentEnrollment(parent, email: email)
+        launch()
+        openConnectionLink(URL(string: try XCTUnwrap(invite.qrPayload))!)
+        confirmServerConnection()
+
+        element("enrollment.parent.name").waitToAppear(timeout: 15).replaceText("Co Parent")
+        typeSecureText(TestAPI.password, into: element("enrollment.parent.password"))
+        XCTAssertEqual(element("enrollment.parent.email").stringValue, email)
+        dismissKeyboard()
+        let submit = element("enrollment.parent.submit")
+        XCTAssertEqual(XCTWaiter().wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "enabled == true"), object: submit)], timeout: 5), .completed)
+        submit.tap()
 
         XCTAssertTrue(app.tabBars.buttons["Dashboard"].waitForExistence(timeout: 15))
         let family = try api.family(parent)
         XCTAssertEqual(Set(family.parents.compactMap(\.email)), [parent.email, email])
     }
 
-    func testKidPairsWithATypedCode() throws {
+    func testKidCompletesPINEnrollment() throws {
         let parent = try api.registerParent()
         let child = try api.addChild(parent, name: "Riley")
-        let code = try api.pairingCode(parent, childId: child.id)
+        let enrollment = try api.childEnrollment(parent, childId: child.id)
 
         launch()
-        element("welcome.kid").waitToAppear(timeout: 15).tap()
-        XCTAssertTrue(element("pairing.scan").waitForExistence(timeout: 5), "QR scanning needs a camera; only the entry point is checked")
-        let join = element("pairing.join")
-        XCTAssertFalse(join.isEnabled)
-
-        let raw = code.code.replacingOccurrences(of: "-", with: "").lowercased()
-        element("pairing.code").replaceText(raw)
-        // Typed input is display-formatted with dashes (synthesized fast typing can outrun the
-        // re-formatting of the last characters, so compare the normalized value).
-        let typed = element("pairing.code").stringValue
-        XCTAssertTrue(typed.contains("-"), "Pairing code field shows dashes, got \(typed)")
-        XCTAssertEqual(typed.replacingOccurrences(of: "-", with: "").uppercased(), raw.uppercased())
-        element("pairing.deviceName").replaceText("Riley's iPad")
-        join.tap()
+        openConnectionLink(URL(string: enrollment.qrPayload)!)
+        confirmServerConnection()
+        let username = "riley-\(UUID().uuidString.prefix(8).lowercased())"
+        element("enrollment.child.username").waitToAppear(timeout: 15).replaceText(username)
+        typeSecureText("123456", into: element("enrollment.child.secret"))
+        typeSecureText("123456", into: element("enrollment.child.confirmation"))
+        element("enrollment.child.deviceName").replaceText("Riley's iPad")
+        dismissKeyboard()
+        let submit = element("enrollment.child.submit")
+        XCTAssertEqual(XCTWaiter().wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "enabled == true"), object: submit)], timeout: 5), .completed)
+        submit.tap()
 
         XCTAssertTrue(app.tabBars.buttons["What I Owe"].waitForExistence(timeout: 15))
         XCTAssertTrue(text("Nothing owed right now").waitForExistence(timeout: 10))
@@ -117,42 +113,65 @@ final class OnboardingTests: BankUITestCase {
         XCTAssertEqual(try api.family(parent).children.first?.pairedDeviceCount, 1)
     }
 
-    func testInvalidPairingCodeShowsAnError() {
+    func testInvalidChildCredentialsShowAnError() {
         launch()
         element("welcome.kid").waitToAppear(timeout: 15).tap()
-        element("pairing.code").replaceText("ZZZZZZZZ")
-        element("pairing.join").tap()
+        element("childLogin.username").waitToAppear().replaceText("missing-child")
+        element("childLogin.secret").replaceText("123456")
+        element("childLogin.submit").tap()
         element("errorBanner").waitToAppear().waitFor(label: "Error")
         XCTAssertFalse(app.tabBars.buttons["What I Owe"].exists)
     }
 
-    func testPairingDeepLinkWhileOnPairingScreen() throws {
+    func testEnrollmentDeepLinkWhileOnChildLoginScreen() throws {
         let parent = try api.registerParent()
         let child = try api.addChild(parent, name: "Link Kid")
-        let code = try api.pairingCode(parent, childId: child.id)
+        let enrollment = try api.childEnrollment(parent, childId: child.id)
 
         launch()
         element("welcome.kid").waitToAppear(timeout: 15).tap()
-        element("pairing.join").waitToAppear()
-        // Opens the link through the system (like tapping it elsewhere) without relaunching the app.
-        XCUIDevice.shared.system.open(URL(string: code.qrPayload)!)
-        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
-        let confirm = springboard.buttons["Open"]
-        if confirm.waitForExistence(timeout: 3) { confirm.tap() }
+        element("childLogin.submit").waitToAppear()
+        openConnectionLink(URL(string: enrollment.qrPayload)!)
 
-        XCTAssertTrue(app.tabBars.buttons["What I Owe"].waitForExistence(timeout: 15))
+        confirmServerConnection()
+        XCTAssertTrue(element("enrollment.child.username").waitForExistence(timeout: 15))
     }
 
-    func testPairingDeepLinkFromWelcomeScreen() throws {
+    func testEnrollmentDeepLinkFromWelcomeScreen() throws {
         let parent = try api.registerParent()
         let child = try api.addChild(parent, name: "Cold Link Kid")
-        let code = try api.pairingCode(parent, childId: child.id)
+        let enrollment = try api.childEnrollment(parent, childId: child.id)
 
         launch()
         element("welcome.kid").waitToAppear(timeout: 15)
-        // Launches the app from the link, like scanning the parent's QR code with the Camera app.
-        app.open(URL(string: code.qrPayload)!)
+        openConnectionLink(URL(string: enrollment.qrPayload)!)
+        confirmServerConnection()
 
-        XCTAssertTrue(app.tabBars.buttons["What I Owe"].waitForExistence(timeout: 15), "Opening a pairing link from the Welcome screen should pair the device")
+        XCTAssertTrue(element("enrollment.child.username").waitForExistence(timeout: 15), "Opening an enrollment link should show child credential setup")
+    }
+
+    private func confirmServerConnection() {
+        let confirm = element("server.confirm")
+        for _ in 0..<8 where !confirm.exists {
+            app.swipeUp()
+            RunLoop.current.run(until: Date().addingTimeInterval(0.25))
+        }
+        XCTAssertTrue(confirm.waitForExistence(timeout: 5), "The server confirmation screen should appear for every connection link")
+        confirm.tap()
+    }
+
+    private func openConnectionLink(_ url: URL) {
+        XCUIDevice.shared.system.open(url)
+        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        let confirm = springboard.buttons["Open"]
+        if confirm.waitForExistence(timeout: 3) { confirm.tap() }
+    }
+
+    private func typeSecureText(_ text: String, into field: XCUIElement) {
+        field.waitToAppear().tap()
+        for character in text {
+            field.typeText(String(character))
+            RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+        }
     }
 }

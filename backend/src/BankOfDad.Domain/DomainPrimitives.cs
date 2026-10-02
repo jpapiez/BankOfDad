@@ -7,6 +7,8 @@ public enum BillStatus { Active, Ended }
 public enum InstallmentStatus { Upcoming, Due, Late, Paid }
 public enum NotificationType { Reminder, Receipt, LoanCreated, LateFee, BillCreated }
 public enum AllocationTarget { LateFee, Interest, Principal, Charge }
+public enum EnrollmentKind { Bootstrap, Parent, Child }
+public enum ChildCredentialKind { Password, Pin }
 
 public static class Money
 {

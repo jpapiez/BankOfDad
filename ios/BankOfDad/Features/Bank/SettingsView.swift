@@ -23,7 +23,7 @@ final class SettingsViewModel {
 @MainActor
 struct SettingsView: View {
     @Environment(AppEnvironment.self) private var environment
-    @Environment(AuthSession.self) private var authSession
+    private var authSession: AuthSession { environment.authSession }
     @State private var viewModel = SettingsViewModel()
     @State private var showingDeleteConfirmation = false
 
@@ -50,6 +50,7 @@ struct SettingsView: View {
             if environment.isDemo {
                 DemoSettingsSection()
             } else {
+                ServerSettingsSection()
                 Section("Danger zone") {
                     Button("Delete My Account", role: .destructive) {
                         showingDeleteConfirmation = true
@@ -74,6 +75,7 @@ struct SettingsView: View {
                     }
                 }
             }
+            .accessibilityIdentifier("settings.confirmDelete")
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("This cannot be undone. Your sign-in credentials, sessions, and Sign in with Apple authorization (if used) will be revoked. If you are the last parent, all private family data will be permanently deleted.")

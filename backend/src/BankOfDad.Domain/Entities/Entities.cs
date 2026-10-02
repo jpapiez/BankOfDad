@@ -12,6 +12,31 @@ public class Family
     public List<User> Users { get; set; } = [];
 }
 
+public class ServerInstallation
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid? FamilyId { get; set; }
+    public Family? Family { get; set; }
+    public DateTimeOffset CreatedAt { get; set; }
+    public DateTimeOffset? InitializedAt { get; set; }
+}
+
+public class EnrollmentToken
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public EnrollmentKind Kind { get; set; }
+    public string TokenHash { get; set; } = string.Empty;
+    public Guid? FamilyId { get; set; }
+    public Family? Family { get; set; }
+    public Guid? ChildUserId { get; set; }
+    public User? ChildUser { get; set; }
+    public string? Email { get; set; }
+    public Guid? CreatedByUserId { get; set; }
+    public DateTimeOffset CreatedAt { get; set; }
+    public DateTimeOffset ExpiresAt { get; set; }
+    public DateTimeOffset? UsedAt { get; set; }
+}
+
 public class User
 {
     public Guid Id { get; set; } = Guid.NewGuid();
@@ -22,6 +47,9 @@ public class User
     public string? Email { get; set; }
     public string? NormalizedEmail { get; set; }
     public string? PasswordHash { get; set; }
+    public string? Username { get; set; }
+    public string? NormalizedUsername { get; set; }
+    public ChildCredentialKind? ChildCredentialKind { get; set; }
     public string? AppleSubject { get; set; }
     public DateTimeOffset? AppleDeletionStartedAt { get; set; }
     public string? AvatarColor { get; set; }

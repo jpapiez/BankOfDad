@@ -2,6 +2,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Data;
 using System.Net.Sockets;
+using System.Net;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -22,6 +23,7 @@ using Microsoft.IdentityModel.Tokens;
 using Npgsql;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.WebUtilities;
+using QRCoder;
 
 var builder = WebApplication.CreateBuilder(args);
 var env = builder.Environment;
@@ -61,6 +63,7 @@ builder.Services.AddScoped<IPasswordService, PasswordService>();
 builder.Services.AddScoped<IAppleTokenValidator, AppleTokenValidator>();
 builder.Services.AddHttpClient<IAppleAuthorizationService, AppleAuthorizationService>();
 builder.Services.AddScoped<AuthService>();
+builder.Services.AddScoped<OnboardingService>();
 builder.Services.AddScoped<AccountDeletionService>();
 builder.Services.AddScoped<NotificationService>();
 builder.Services.AddScoped<LoanSweeper>();
@@ -117,7 +120,12 @@ builder.Services.AddAuthorization(options =>
 });
 if (!env.IsEnvironment("Testing"))
 {
-    builder.Services.AddRateLimiter(options => options.AddPolicy("auth", context => RateLimitPartition.GetFixedWindowLimiter(context.Connection.RemoteIpAddress?.ToString() ?? "unknown", _ => new FixedWindowRateLimiterOptions { PermitLimit = 100, Window = TimeSpan.FromMinutes(1), QueueLimit = 20 })));
+    builder.Services.AddRateLimiter(options =>
+    {
+        options.AddPolicy("auth", context => RateLimitPartition.GetFixedWindowLimiter(context.Connection.RemoteIpAddress?.ToString() ?? "unknown", _ => new FixedWindowRateLimiterOptions { PermitLimit = 100, Window = TimeSpan.FromMinutes(1), QueueLimit = 20 }));
+        options.AddPolicy("setup", context => RateLimitPartition.GetFixedWindowLimiter(context.Connection.RemoteIpAddress?.ToString() ?? "unknown", _ => new FixedWindowRateLimiterOptions { PermitLimit = 5, Window = TimeSpan.FromMinutes(5), QueueLimit = 0 }));
+        options.AddPolicy("child-login", context => RateLimitPartition.GetFixedWindowLimiter(context.Connection.RemoteIpAddress?.ToString() ?? "unknown", _ => new FixedWindowRateLimiterOptions { PermitLimit = 10, Window = TimeSpan.FromMinutes(5), QueueLimit = 0 }));
+    });
 }
 
 var app = builder.Build();
@@ -159,13 +167,73 @@ if (!env.IsEnvironment("Testing")) app.UseRateLimiter();
 await ApplyMigrationsAsync(app.Services, app.Logger);
 
 app.MapGet("/health", async (BankOfDadDbContext db, CancellationToken ct) => await db.Database.CanConnectAsync(ct) ? Results.Text("Healthy") : Results.Problem("Database unavailable", statusCode: 503));
+app.MapGet("/.well-known/bankofdad", async (OnboardingService onboarding, CancellationToken ct) => Results.Ok(await onboarding.DescriptorAsync(ct)));
+app.MapGet("/", async (OnboardingService onboarding, CancellationToken ct) =>
+{
+    var descriptor = await onboarding.DescriptorAsync(ct);
+    var body = descriptor.SetupState == "ready"
+        ? SetupPage("Bank of Dad is ready", $"Connected to {WebUtility.HtmlEncode(descriptor.FamilyName ?? "your family")}. Open the Bank of Dad app to sign in or scan an invitation from a parent.", null)
+        : SetupPage("Set up Bank of Dad", "Enter the one-time setup code printed by the deployment helper.", """
+            <form method="post" action="/setup/unlock">
+              <label for="code">One-time setup code</label>
+              <input id="code" name="code" type="password" autocomplete="one-time-code" required />
+              <button type="submit">Show setup QR</button>
+            </form>
+            """);
+    return Results.Content(body, "text/html; charset=utf-8");
+});
+var setupUnlock = app.MapPost("/setup/unlock", async (HttpRequest request, OnboardingService onboarding, CancellationToken ct) =>
+{
+    var descriptor = await onboarding.DescriptorAsync(ct);
+    if (descriptor.SetupState != "uninitialized") throw new ApiException(409, "This server is already initialized.");
+    var form = await request.ReadFormAsync(ct);
+    if (!onboarding.VerifySetupCode(form["code"].ToString())) throw new ApiException(401, "Invalid setup code.");
+    var grant = await onboarding.CreateEnrollmentAsync(EnrollmentKind.Bootstrap, null, null, null, null, TimeSpan.FromMinutes(15), ct);
+    using var qrData = QRCodeGenerator.GenerateQrCode(grant.QrPayload, QRCodeGenerator.ECCLevel.Q);
+    var svg = new SvgQRCode(qrData).GetGraphic(5);
+    var content = $"""
+        <p>Scan this code with Bank of Dad within 15 minutes.</p>
+        <div class="qr">{svg}</div>
+        <p class="origin">{WebUtility.HtmlEncode(descriptor.Origin)}</p>
+        """;
+    return Results.Content(SetupPage("Connect the first parent", "The app will confirm the server before creating your family.", content), "text/html; charset=utf-8");
+});
+if (!env.IsEnvironment("Testing")) setupUnlock.RequireRateLimiting("setup");
 
 var api = app.MapGroup("/api/v1");
+api.MapPost("/enrollment/inspect", async (EnrollmentInspectRequest request, OnboardingService onboarding, CancellationToken ct) => Results.Ok(await onboarding.InspectAsync(request.Token, ct)));
+api.MapPost("/setup/complete", async (BootstrapCompleteRequest request, BankOfDadDbContext db, AuthService authService, OnboardingService onboarding, IClock clock, CancellationToken ct) =>
+{
+    ValidatePassword(request.Password);
+    ValidateTimeZone(request.TimeZone);
+    var email = NormalizeEmail(request.Email);
+    await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
+    var installation = await db.ServerInstallations
+        .FromSqlRaw("SELECT * FROM \"ServerInstallations\" FOR UPDATE")
+        .SingleAsync(ct);
+    if (installation.InitializedAt is not null || installation.FamilyId is not null || await db.Families.AnyAsync(ct))
+    {
+        throw new ApiException(409, "This server is already initialized.");
+    }
+    var enrollment = await onboarding.LockEnrollmentAsync(request.Token, EnrollmentKind.Bootstrap, ct);
+    var family = new Family { Name = Required(request.FamilyName, "familyName"), TimeZone = request.TimeZone, CreatedAt = clock.UtcNow };
+    var user = new User { Family = family, Role = Role.Parent, DisplayName = Required(request.DisplayName, "displayName"), Email = request.Email.Trim(), NormalizedEmail = email, CreatedAt = clock.UtcNow };
+    user.PasswordHash = authService.HashPassword(user, request.Password);
+    enrollment.UsedAt = clock.UtcNow;
+    installation.FamilyId = family.Id;
+    installation.InitializedAt = clock.UtcNow;
+    db.AddRange(family, user);
+    await db.SaveChangesAsync(ct);
+    var authResponse = await authService.IssueAsync(user, null, ct);
+    await transaction.CommitAsync(ct);
+    return Results.Created("/api/v1/auth/me", authResponse);
+});
 var auth = api.MapGroup("/auth");
 if (!env.IsEnvironment("Testing")) auth.RequireRateLimiting("auth");
 
 auth.MapPost("/register", async (RegisterRequest request, BankOfDadDbContext db, AuthService authService, IClock clock, CancellationToken ct) =>
 {
+    if (!env.IsDevelopment() && !env.IsEnvironment("Testing") && !builder.Configuration.GetValue("Onboarding:LegacyRegistrationEnabled", false)) throw new ApiException(404, "Not found.");
     ValidatePassword(request.Password);
     ValidateTimeZone(request.TimeZone);
     var email = NormalizeEmail(request.Email);
@@ -176,6 +244,61 @@ auth.MapPost("/register", async (RegisterRequest request, BankOfDadDbContext db,
     db.AddRange(family, user);
     await db.SaveChangesAsync(ct);
     return Results.Created("/api/v1/auth/me", await authService.IssueAsync(user, null, ct));
+});
+
+var childLogin = auth.MapPost("/child-login", async (ChildLoginRequest request, BankOfDadDbContext db, AuthService authService, OnboardingService onboarding, CancellationToken ct) =>
+{
+    var normalized = OnboardingService.NormalizeUsername(request.Username);
+    var user = await db.Users.SingleOrDefaultAsync(x => x.NormalizedUsername == normalized && x.Role == Role.Child, ct);
+    if (user is null || user.ChildCredentialKind is null || !authService.Verify(user, request.Secret))
+    {
+        throw new ApiException(401, "Invalid username or credential.");
+    }
+    return Results.Ok(await authService.IssueAsync(user, request.DeviceName, ct));
+});
+if (!env.IsEnvironment("Testing")) childLogin.RequireRateLimiting("child-login");
+
+auth.MapPost("/complete-child-enrollment", async (ChildEnrollmentRequest request, BankOfDadDbContext db, AuthService authService, OnboardingService onboarding, IClock clock, CancellationToken ct) =>
+{
+    if (request.CredentialKind == ChildCredentialKind.Pin) onboarding.ValidatePin(request.Secret);
+    else ValidatePassword(request.Secret);
+    var normalized = OnboardingService.NormalizeUsername(request.Username);
+    await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
+    var enrollment = await onboarding.LockEnrollmentAsync(request.Token, EnrollmentKind.Child, ct);
+    var child = enrollment.ChildUserId is null
+        ? null
+        : await db.Users.FromSqlInterpolated($"SELECT * FROM \"Users\" WHERE \"Id\" = {enrollment.ChildUserId} FOR UPDATE").SingleOrDefaultAsync(ct);
+    if (child is null || child.Role != Role.Child) throw new ApiException(401, "Invalid enrollment token.");
+    if (await db.Users.AnyAsync(x => x.NormalizedUsername == normalized && x.Id != child.Id, ct)) throw new ApiException(409, "Username is already in use.");
+    child.Username = request.Username.Trim();
+    child.NormalizedUsername = normalized;
+    child.ChildCredentialKind = request.CredentialKind;
+    child.PasswordHash = authService.HashPassword(child, request.Secret);
+    enrollment.UsedAt = clock.UtcNow;
+    await db.RefreshTokens.Where(x => x.UserId == child.Id && x.RevokedAt == null).ExecuteUpdateAsync(s => s.SetProperty(x => x.RevokedAt, clock.UtcNow), ct);
+    await db.SaveChangesAsync(ct);
+    var authResponse = await authService.IssueAsync(child, request.DeviceName, ct);
+    await transaction.CommitAsync(ct);
+    return Results.Ok(authResponse);
+});
+
+auth.MapPost("/accept-enrollment", async (AcceptInviteRequest request, BankOfDadDbContext db, AuthService authService, OnboardingService onboarding, IClock clock, CancellationToken ct) =>
+{
+    ValidatePassword(request.Password);
+    var email = NormalizeEmail(request.Email);
+    await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
+    var enrollment = await onboarding.LockEnrollmentAsync(request.InviteCode, EnrollmentKind.Parent, ct);
+    if (enrollment.FamilyId is null) throw new ApiException(401, "Invalid enrollment token.");
+    if (enrollment.Email is not null && NormalizeEmail(enrollment.Email) != email) throw new ApiException(401, "This invitation was issued for a different email address.");
+    if (await db.Users.AnyAsync(x => x.NormalizedEmail == email, ct)) throw new ApiException(409, "Email already registered.");
+    var user = new User { FamilyId = enrollment.FamilyId.Value, Role = Role.Parent, DisplayName = Required(request.DisplayName, "displayName"), Email = request.Email.Trim(), NormalizedEmail = email, CreatedAt = clock.UtcNow };
+    user.PasswordHash = authService.HashPassword(user, request.Password);
+    enrollment.UsedAt = clock.UtcNow;
+    db.Users.Add(user);
+    await db.SaveChangesAsync(ct);
+    var authResponse = await authService.IssueAsync(user, null, ct);
+    await transaction.CommitAsync(ct);
+    return Results.Created("/api/v1/auth/me", authResponse);
 });
 
 auth.MapPost("/login", async (LoginRequest request, BankOfDadDbContext db, AuthService authService, CancellationToken ct) =>
@@ -214,8 +337,9 @@ auth.MapPost("/accept-invite", async (AcceptInviteRequest request, BankOfDadDbCo
     return Results.Created("/api/v1/auth/me", await authService.IssueAsync(user, null, ct));
 });
 
-auth.MapPost("/apple", async (AppleRequest request, BankOfDadDbContext db, AuthService authService, IAppleTokenValidator apple, IAppleAuthorizationService appleAuthorization, IClock clock, CancellationToken ct) =>
+auth.MapPost("/apple", async (AppleRequest request, BankOfDadDbContext db, AuthService authService, IAppleTokenValidator apple, IAppleAuthorizationService appleAuthorization, OnboardingService onboarding, IClock clock, CancellationToken ct) =>
 {
+    if (!onboarding.AppleEnabled && !env.IsEnvironment("Testing")) throw new ApiException(404, "Not found.");
     using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
     var appleUser = await apple.ValidateAsync(request.IdentityToken, ct);
 
@@ -287,6 +411,10 @@ auth.MapPost("/apple", async (AppleRequest request, BankOfDadDbContext db, AuthS
     }
     else
     {
+        if (!env.IsDevelopment() && !env.IsEnvironment("Testing"))
+        {
+            throw new ApiException(409, "Use the server setup QR to create the first family.");
+        }
         var tz = request.TimeZone ?? "America/Los_Angeles";
         ValidateTimeZone(tz);
         newFamily = new Family { Name = request.FamilyName ?? "Family", TimeZone = tz, CreatedAt = clock.UtcNow };
@@ -334,6 +462,11 @@ familyGroup.MapPost("/invites", async (InviteRequest request, ClaimsPrincipal us
     await db.SaveChangesAsync(ct);
     return Results.Created("/api/v1/family/invites", new InviteResponse(code, invite.ExpiresAt));
 });
+familyGroup.MapPost("/invites/enrollment", async (InviteRequest request, ClaimsPrincipal user, OnboardingService onboarding, CancellationToken ct) =>
+{
+    var grant = await onboarding.CreateEnrollmentAsync(EnrollmentKind.Parent, user.FamilyId(), null, request.Email, user.UserId(), TimeSpan.FromDays(7), ct);
+    return Results.Created("/api/v1/family/invites/enrollment", new InviteResponse(grant.Token, grant.ExpiresAt, grant.QrPayload));
+});
 familyGroup.MapPost("/children", async (ChildRequest request, ClaimsPrincipal user, BankOfDadDbContext db, IClock clock, CancellationToken ct) =>
 {
     var child = new User { FamilyId = user.FamilyId(), Role = Role.Child, DisplayName = ValidChildName(request.DisplayName), AvatarColor = ValidAvatarColor(request.AvatarColor), CreatedAt = clock.UtcNow };
@@ -359,6 +492,18 @@ familyGroup.MapPost("/children/{childId:guid}/pairing-code", async (Guid childId
     await db.SaveChangesAsync(ct);
     var display = CodeGenerator.FormatPairingCode(code);
     return Results.Created("/api/v1/family/children/pairing-code", new PairingCodeResponse(display, $"bankofdad://pair?code={code}", pairing.ExpiresAt));
+});
+familyGroup.MapPost("/children/{childId:guid}/enrollment", async (Guid childId, ClaimsPrincipal user, BankOfDadDbContext db, OnboardingService onboarding, IClock clock, CancellationToken ct) =>
+{
+    var child = await db.Users.SingleOrDefaultAsync(x => x.Id == childId && x.FamilyId == user.FamilyId() && x.Role == Role.Child, ct) ?? throw new ApiException(404, "Child not found.");
+    await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
+    await db.RefreshTokens.Where(x => x.UserId == childId && x.RevokedAt == null).ExecuteUpdateAsync(s => s.SetProperty(x => x.RevokedAt, clock.UtcNow), ct);
+    await db.EnrollmentTokens
+        .Where(x => x.ChildUserId == childId && x.Kind == EnrollmentKind.Child && x.UsedAt == null && x.ExpiresAt > clock.UtcNow)
+        .ExecuteUpdateAsync(s => s.SetProperty(x => x.UsedAt, clock.UtcNow), ct);
+    var grant = await onboarding.CreateEnrollmentAsync(EnrollmentKind.Child, user.FamilyId(), child.Id, null, user.UserId(), TimeSpan.FromMinutes(15), ct);
+    await transaction.CommitAsync(ct);
+    return Results.Created("/api/v1/family/children/enrollment", new PairingCodeResponse(grant.Token, grant.QrPayload, grant.ExpiresAt));
 });
 familyGroup.MapDelete("/children/{childId:guid}/devices", async (Guid childId, ClaimsPrincipal user, BankOfDadDbContext db, IClock clock, CancellationToken ct) =>
 {
@@ -544,6 +689,32 @@ if (TestHooks.IsEnabled(app.Environment, app.Configuration))
 }
 
 await app.RunAsync();
+
+static string SetupPage(string title, string message, string? content) =>
+    $$"""
+    <!doctype html>
+    <html lang="en">
+    <head>
+      <meta charset="utf-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1" />
+      <title>{{WebUtility.HtmlEncode(title)}} · Bank of Dad</title>
+      <style>
+        :root { color-scheme: light dark; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+        body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #f2f2f7; color: #17202a; }
+        main { width: min(32rem, calc(100% - 2rem)); box-sizing: border-box; padding: 2rem; border-radius: 1.25rem; background: white; box-shadow: 0 1rem 3rem #0002; text-align: center; }
+        h1 { margin-top: 0; } p { line-height: 1.5; color: #566573; }
+        form { display: grid; gap: 1rem; text-align: left; margin-top: 1.5rem; }
+        input, button { box-sizing: border-box; width: 100%; min-height: 3rem; padding: .75rem 1rem; border-radius: .75rem; font: inherit; }
+        input { border: 1px solid #aab7b8; background: white; color: #17202a; }
+        button { border: 0; background: #b8860b; color: white; font-weight: 700; cursor: pointer; }
+        .qr svg { width: min(20rem, 100%); height: auto; background: white; padding: .75rem; box-sizing: border-box; }
+        .origin { overflow-wrap: anywhere; font-family: ui-monospace, monospace; }
+        @media (prefers-color-scheme: dark) { body { background: #111318; color: #f5f5f7; } main { background: #20242b; } p { color: #c7c7cc; } input { background: #111318; color: #f5f5f7; } }
+      </style>
+    </head>
+    <body><main><h1>{{WebUtility.HtmlEncode(title)}}</h1><p>{{WebUtility.HtmlEncode(message)}}</p>{{content ?? string.Empty}}</main></body>
+    </html>
+    """;
 
 static async Task ApplyMigrationsAsync(IServiceProvider services, ILogger logger)
 {

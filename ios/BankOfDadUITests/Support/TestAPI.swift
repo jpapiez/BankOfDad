@@ -90,6 +90,10 @@ final class TestAPI {
         try decode(PairingCode.self, "POST", "/api/v1/family/children/\(childId)/pairing-code", token: parent.token)
     }
 
+    func childEnrollment(_ parent: Parent, childId: String) throws -> PairingCode {
+        try decode(PairingCode.self, "POST", "/api/v1/family/children/\(childId)/enrollment", token: parent.token)
+    }
+
     func pair(code: String, deviceName: String = "UITest iPhone") throws -> AuthTokens {
         try decode(AuthTokens.self, "POST", "/api/v1/auth/pair", body: ["code": code, "deviceName": deviceName])
     }
@@ -105,6 +109,12 @@ final class TestAPI {
         var body: [String: Any] = [:]
         if let email { body["email"] = email }
         return try decode(Invite.self, "POST", "/api/v1/family/invites", body: body, token: parent.token)
+    }
+
+    func parentEnrollment(_ parent: Parent, email: String? = nil) throws -> Invite {
+        var body: [String: Any] = [:]
+        if let email { body["email"] = email }
+        return try decode(Invite.self, "POST", "/api/v1/family/invites/enrollment", body: body, token: parent.token)
     }
 
     func acceptInvite(code: String, email: String = TestAPI.uniqueEmail("coparent"), name: String = "Co-parent") throws -> AuthTokens {
@@ -265,6 +275,7 @@ struct PairingCode: Decodable {
 
 struct Invite: Decodable {
     let inviteCode: String
+    let qrPayload: String?
 }
 
 struct LoanSummary: Decodable {

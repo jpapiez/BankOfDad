@@ -8,6 +8,8 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 public sealed class BankOfDadDbContext(DbContextOptions<BankOfDadDbContext> options) : DbContext(options)
 {
     public DbSet<Family> Families => Set<Family>();
+    public DbSet<ServerInstallation> ServerInstallations => Set<ServerInstallation>();
+    public DbSet<EnrollmentToken> EnrollmentTokens => Set<EnrollmentToken>();
     public DbSet<User> Users => Set<User>();
     public DbSet<AppleRefreshToken> AppleRefreshTokens => Set<AppleRefreshToken>();
     public DbSet<FamilyInvite> FamilyInvites => Set<FamilyInvite>();
@@ -49,6 +51,8 @@ public sealed class BankOfDadDbContext(DbContextOptions<BankOfDadDbContext> opti
         var billStatusConverter = new EnumToStringConverter<BillStatus>();
         var notificationConverter = new EnumToStringConverter<NotificationType>();
         var allocationConverter = new EnumToStringConverter<AllocationTarget>();
+        var enrollmentKindConverter = new EnumToStringConverter<EnrollmentKind>();
+        var childCredentialKindConverter = new EnumToStringConverter<ChildCredentialKind>();
 
         modelBuilder.Entity<Family>(b =>
         {
@@ -57,16 +61,34 @@ public sealed class BankOfDadDbContext(DbContextOptions<BankOfDadDbContext> opti
             b.Property(x => x.Currency).HasMaxLength(3).HasDefaultValue("USD").IsRequired();
         });
 
+        modelBuilder.Entity<ServerInstallation>(b =>
+        {
+            b.HasIndex(x => x.FamilyId).IsUnique().HasFilter("\"FamilyId\" IS NOT NULL");
+        });
+
+        modelBuilder.Entity<EnrollmentToken>(b =>
+        {
+            b.Property(x => x.Kind).HasConversion(enrollmentKindConverter).HasMaxLength(20);
+            b.Property(x => x.TokenHash).HasMaxLength(64).IsRequired();
+            b.Property(x => x.Email).HasMaxLength(320);
+            b.HasIndex(x => x.TokenHash).IsUnique();
+            b.HasIndex(x => new { x.FamilyId, x.Kind, x.ExpiresAt });
+        });
+
         modelBuilder.Entity<User>(b =>
         {
             b.Property(x => x.Role).HasConversion(roleConverter).HasMaxLength(20);
             b.Property(x => x.DisplayName).HasMaxLength(100).IsRequired();
             b.Property(x => x.Email).HasMaxLength(320);
             b.Property(x => x.NormalizedEmail).HasMaxLength(320);
+            b.Property(x => x.Username).HasMaxLength(50);
+            b.Property(x => x.NormalizedUsername).HasMaxLength(50);
+            b.Property(x => x.ChildCredentialKind).HasConversion(childCredentialKindConverter).HasMaxLength(20);
             b.Property(x => x.AppleSubject).HasMaxLength(200);
             b.Property(x => x.AppleDeletionStartedAt);
             b.Property(x => x.AvatarColor).HasMaxLength(20);
             b.HasIndex(x => x.NormalizedEmail).IsUnique().HasFilter("\"NormalizedEmail\" IS NOT NULL");
+            b.HasIndex(x => x.NormalizedUsername).IsUnique().HasFilter("\"NormalizedUsername\" IS NOT NULL");
             b.HasIndex(x => x.AppleSubject).IsUnique().HasFilter("\"AppleSubject\" IS NOT NULL");
             b.HasIndex(x => new { x.FamilyId, x.Role });
         });

@@ -28,7 +28,10 @@ install -m 0600 "$src/settings.env" "$app/settings.env"
 
 # Generated once on the VM and never leave it. The Postgres password is fixed when the volume is first created.
 if [[ ! -s $app/secrets.env ]]; then
-  (umask 077; printf 'POSTGRES_PASSWORD=%s\nJWT_SIGNING_KEY=%s\n' "$(openssl rand -hex 32)" "$(openssl rand -hex 32)" > "$app/secrets.env")
+  (umask 077; printf 'POSTGRES_PASSWORD=%s\nJWT_SIGNING_KEY=%s\nSETUP_CODE=%s\n' "$(openssl rand -hex 32)" "$(openssl rand -hex 48)" "$(openssl rand -hex 12)" > "$app/secrets.env")
+fi
+if ! grep -q '^SETUP_CODE=.' "$app/secrets.env"; then
+  (umask 077; printf 'SETUP_CODE=%s\n' "$(openssl rand -hex 12)" >> "$app/secrets.env")
 fi
 (umask 077; cat "$app/settings.env" "$app/secrets.env" > "$app/.env")
 
@@ -36,10 +39,11 @@ fi
 if [[ -f $src/SignInWithAppleKey.p8 ]]; then
   install -m 0400 -o 1654 -g 1654 "$src/SignInWithAppleKey.p8" "$app/secrets/SignInWithAppleKey.p8"
 fi
-[[ -s $app/secrets/SignInWithAppleKey.p8 ]] || {
-  echo "Sign in with Apple key is missing; set APPLE_KEY_FILE on the first update." >&2
+apple_key_id=$(grep -E '^APPLE_KEY_ID=' "$app/settings.env" | tail -n 1 | cut -d= -f2-)
+if [[ -n $apple_key_id && ! -s $app/secrets/SignInWithAppleKey.p8 ]]; then
+  echo "Sign in with Apple key is missing; set APPLE_KEY_FILE when APPLE_KEY_ID is configured." >&2
   exit 1
-}
+fi
 if [[ -f $src/AuthKey.p8 ]]; then
   install -m 0400 -o 1654 -g 1654 "$src/AuthKey.p8" "$app/secrets/AuthKey.p8"
 fi
@@ -80,4 +84,12 @@ case $state in
 esac
 
 [[ $health == Healthy ]] || { echo "The API is not healthy; check 'docker compose logs api' on the VM." >&2; exit 1; }
+descriptor=$(curl -fsS "http://127.0.0.1:${port:-8080}/.well-known/bankofdad")
+if grep -q '"setupState":"uninitialized"' <<<"$descriptor"; then
+  public_url=$(grep -E '^PUBLIC_BASE_URL=' "$app/.env" | tail -n 1 | cut -d= -f2-)
+  setup_code=$(grep -E '^SETUP_CODE=' "$app/.env" | tail -n 1 | cut -d= -f2-)
+  echo "Open $public_url and enter this one-time setup code: $setup_code"
+else
+  echo "Family server setup is already complete."
+fi
 echo BANKOFDAD_APPLY_OK

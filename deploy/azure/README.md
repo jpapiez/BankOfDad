@@ -49,7 +49,7 @@ These are pay-as-you-go prices in West US 2 at the time of writing. Check the [p
 - **`cloud-init.yaml`** runs on first boot. It installs Docker Engine from Docker's apt repository and adds a 2 GiB swapfile. It also sets up unattended upgrades for Ubuntu security updates and Docker Engine, rebooting at 11:00 UTC when an update requires it. Azure fixes this file and the SSH key when the VM is created, so re-running `deploy.sh` doesn't reapply them; to pick up changes, back up, delete the VM, deploy again and restore.
 - **`update.sh`** bundles the compose file, the Tailscale serve config, [`vm/`](vm) and your settings, and runs [`vm/apply.sh`](vm/apply.sh) on the VM. `apply.sh`:
   - installs everything into `/opt/bankofdad`;
-  - generates the Postgres password and JWT key the first time (they never leave the VM);
+  - generates the Postgres password, JWT key, and one-time family setup code the first time;
   - pulls the image and starts the stack;
   - enables the nightly backup timer (10:00 UTC);
   - prints the API health and the node's `ts.net` URL.
@@ -82,7 +82,7 @@ Tailscale: Running
 URL: https://bankofdad.<tailnet>.ts.net
 ```
 
-Then [point the app at that URL](../README.md#3-point-the-app-at-the-server).
+The command output prints the one-time setup code. Open the HTTPS URL, enter that code, and scan the setup QR from the app.
 
 ### Settings
 
@@ -101,12 +101,14 @@ Then [point the app at that URL](../README.md#3-point-the-app-at-the-server).
 | `TS_HOSTNAME` | `bankofdad` | Node name, which becomes `https://<name>.<tailnet>.ts.net`. |
 | `TS_EXTRA_ARGS` | | For example `--advertise-tags=tag:bankofdad`. |
 | `BANKOFDAD_IMAGE` | `ghcr.io/jpapiez/bankofdad-api:latest` | Pin `:sha-<short sha>` to hold a version. |
-| `APPLE_CLIENT_ID`, `APPLE_TEAM_ID`, `APPLE_KEY_ID`, `APPLE_TOKEN_ENCRYPTION_KEY`, `APNS_KEY_ID`, `APNS_TEAM_ID`, `APNS_BUNDLE_ID`, `APNS_USE_SANDBOX` | as in [`.env.example`](../.env.example) | Sign in with Apple token retention/revocation and push notifications. |
-| `APPLE_KEY_FILE` | | Local path to your Sign in with Apple `SignInWithAppleKey.p8`. Required on the first deploy; later updates keep the key already on the VM. |
+| `PUBLIC_BASE_URL` | required | Canonical HTTPS origin used by family phones, such as `https://bankofdad.<tailnet>.ts.net`. |
+| `CHILD_PIN_MIN_LENGTH` | `6` | Deployment-wide child PIN minimum, from 4 through 12. |
+| `APPLE_CLIENT_ID`, `APPLE_TEAM_ID`, `APPLE_KEY_ID`, `APPLE_TOKEN_ENCRYPTION_KEY`, `APNS_KEY_ID`, `APNS_TEAM_ID`, `APNS_BUNDLE_ID`, `APNS_USE_SANDBOX` | empty/default | Optional official/custom-app Apple auth and push configuration. Ordinary self-hosting leaves it disabled and uses Inbox. |
+| `APPLE_KEY_FILE` | | Local path to `SignInWithAppleKey.p8`; required only when `APPLE_KEY_ID` is configured. Later updates retain an installed key. |
 | `APNS_KEY_FILE` | | Local path to your APNs `AuthKey.p8`. It's copied to the VM. |
 | `GHCR_USER`, `GHCR_TOKEN` | | Only needed if `BANKOFDAD_IMAGE` points at a private registry image (a token with `read:packages`). The default image is public. |
 
-`update.sh` rewrites the settings on every run, so always run it with your full set of variables. The exceptions are `TS_AUTHKEY`, which is only needed once, and the key-file variables: existing Sign in with Apple and APNs keys on the VM are kept when `APPLE_KEY_FILE` or `APNS_KEY_FILE` is omitted.
+`update.sh` rewrites settings on every run, so always provide `PUBLIC_BASE_URL` and your full settings set. `TS_AUTHKEY` is needed only once. Existing optional Apple/APNs key files are retained when omitted.
 
 ## Update
 
@@ -116,7 +118,7 @@ Use this to pick up a new image, a change to `deploy/docker-compose.yml`, or new
 deploy/azure/update.sh
 ```
 
-It pulls the latest image and recreates any containers that changed. To roll back, set `BANKOFDAD_IMAGE=ghcr.io/jpapiez/bankofdad-api:sha-<short sha>` and run it again. To change the Azure resources themselves (such as the VM size or retention), run `deploy.sh` again.
+It pulls the latest image, recreates changed containers, waits for readiness, and either prints the one-time setup code or confirms that setup is complete. To roll back, set `BANKOFDAD_IMAGE=ghcr.io/jpapiez/bankofdad-api:sha-<short sha>` and run it again. To change Azure resources, run `deploy.sh` again.
 
 ## Backups and restore
 
@@ -155,7 +157,7 @@ See also the [home-server troubleshooting](../README.md#troubleshooting).
 Keep your subscription, resource group and Tailscale settings in a **private** repository. That repository runs `deploy.sh` or `update.sh` from a pinned BankOfDad ref using GitHub Actions and [OpenID Connect](https://learn.microsoft.com/azure/developer/github/connect-from-azure-openid-connect), so no Azure secret is stored:
 
 1. Create a user-assigned managed identity. Add a federated credential for your deployment repo's `production` environment. Grant the identity **Owner** on the resource group (needed for the backup role assignment).
-2. In the deployment repo, set these Actions variables: `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`, the settings above, and `BANKOFDAD_REF`. Store `TS_AUTHKEY`, `APPLE_TOKEN_ENCRYPTION_KEY`, and the Apple private keys as environment secrets.
+2. In the deployment repo, set these Actions variables: `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`, `PUBLIC_BASE_URL`, the settings above, and `BANKOFDAD_REF`. Store `TS_AUTHKEY` as an environment secret. Apple secrets are needed only for an official/custom app deployment.
 3. The workflow checks out `jpapiez/BankOfDad` at `BANKOFDAD_REF`, runs `azure/login` with `id-token: write`, then runs `deploy/azure/deploy.sh` (or `update.sh`).
 
 ## Tear down

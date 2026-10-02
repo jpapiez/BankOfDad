@@ -39,6 +39,8 @@
 	<dict>
 		<key>NSAllowsArbitraryLoads</key>
 		<false/>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
 		<key>NSExceptionDomains</key>
 		<dict>
 			<key>127.0.0.1</key>
@@ -55,6 +57,8 @@
 	</dict>
 	<key>NSCameraUsageDescription</key>
 	<string>Camera access lets kids scan pairing QR codes from their parent.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Bank of Dad uses your local network to connect to your family's private server.</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>remote-notification</string>

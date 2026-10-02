@@ -3,8 +3,8 @@
 #
 # Usage: ios/scripts/testflight.sh
 #
-# Needs, in ios/Config/Local.xcconfig: BANKOFDAD_BUNDLE_ID, DEVELOPMENT_TEAM and an https
-# API_BASE_URL. Xcode must be signed in to that team (Xcode > Settings > Accounts), and the
+# Needs, in ios/Config/Local.xcconfig: BANKOFDAD_BUNDLE_ID and DEVELOPMENT_TEAM.
+# Family servers are selected at runtime. Xcode must be signed in to that team, and the
 # app must already exist in App Store Connect. See ios/README.md.
 #
 # Environment:
@@ -27,12 +27,10 @@ settings=$(xcodebuild -showBuildSettings -scheme BankOfDad -configuration Releas
 setting() { awk -F' = ' -v k="    $1" '$1 == k { print $2; exit }' <<<"$settings"; }
 bundle_id=$(setting PRODUCT_BUNDLE_IDENTIFIER)
 team=$(setting DEVELOPMENT_TEAM)
-api=$(setting API_BASE_URL)
 version=$(setting MARKETING_VERSION)
 
 [[ -n $team ]] || die "set DEVELOPMENT_TEAM in Config/Local.xcconfig"
 [[ $bundle_id != com.example.* ]] || die "set BANKOFDAD_BUNDLE_ID in Config/Local.xcconfig (currently $bundle_id)"
-[[ $api == https://* ]] || die "API_BASE_URL must be https for devices (currently $api)"
 
 build=${BUILD_NUMBER:-$(date -u +%Y%m%d.%H%M)}
 archive=build/BankOfDad.xcarchive
@@ -46,7 +44,7 @@ if [[ -n ${ASC_KEY_PATH:-} ]]; then
 fi
 [[ ${UPLOAD:-1} == 0 ]] && destination=export
 
-echo "Archiving $bundle_id $version ($build) for team $team, server $api"
+echo "Archiving $bundle_id $version ($build) for team $team"
 rm -rf "$archive" "$export_dir"
 xcodebuild archive -quiet \
   -scheme BankOfDad -configuration Release \

@@ -10,7 +10,6 @@ struct BankOfDadApp: App {
         WindowGroup {
             RootView()
                 .environment(environment)
-                .environment(environment.authSession)
                 .environment(environment.router)
                 .task {
                     let demoOptions = DemoLaunchOptions.current
@@ -18,7 +17,7 @@ struct BankOfDadApp: App {
                         await environment.enterDemo(role: demoOptions.role, referenceDate: demoOptions.referenceDate)
                         return
                     }
-                    await environment.authSession.bootstrap()
+                    await environment.bootstrap()
                 }
                 .onOpenURL { url in
                     // Pairing links are ignored while someone is signed in or exploring the demo.

@@ -51,8 +51,10 @@ targets:
           - UIInterfaceOrientationPortrait
         API_BASE_URL: $(API_BASE_URL)
         NSCameraUsageDescription: Camera access lets kids scan pairing QR codes from their parent.
+        NSLocalNetworkUsageDescription: Bank of Dad uses your local network to connect to your family's private server.
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: false
+          NSAllowsLocalNetworking: true
           NSExceptionDomains:
             localhost:
               NSExceptionAllowsInsecureHTTPLoads: true

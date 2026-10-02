@@ -7,9 +7,9 @@ Bank of Dad is designed for one private family at a time. The family operates it
 ## Data stored and why
 
 - **Parent account data:** display name, email address, internal account identifier, Apple identifier and encrypted Apple refresh token when Sign in with Apple is used, and password authentication data. This is used to authenticate parents, identify the family account, and revoke Apple authorization during deletion.
-- **Child profile data:** child display name and selected avatar color. This is used to show the child view and distinguish family members.
+- **Child profile data:** child display name, selected avatar color, unique username, chosen credential type, and hashed password or PIN authentication data. This is used to show the child view, distinguish family members, and authenticate child devices.
 - **Family ledger data:** family name, time zone, currency, loan and recurring-bill terms, repayment schedules, payment history, late fees, receipts, and notes. This is the core service requested by the family.
-- **Device and security data:** APNs device token, device name, token expiration/revocation state, hashed refresh tokens, and timestamps. These are used for notifications, session security, and device access control.
+- **Device and security data:** selected server identity and origin on the phone, optional APNs device token, device name, token expiration/revocation state, hashed enrollment and refresh tokens, and timestamps. These are used for secure onboarding, notifications when supported, session security, and device access control.
 - **Operational data:** service logs and error information may be retained by the family-operated host for troubleshooting and security. Operators should configure host logging according to their retention needs.
 
 Bank of Dad does **not** use advertising, analytics, cross-site tracking, tracking identifiers, data brokerage, or sale of personal information. The app does not sell family or children's data.
@@ -26,7 +26,7 @@ Children's profiles and ledger entries are entered and controlled by the parent 
 
 ## Security
 
-The service uses authenticated HTTPS deployments, signed short-lived access tokens, hashed refresh tokens, and revocable device tokens. Families should keep the service, Tailscale, Apple accounts, and hosting environment up to date; never share pairing codes or credentials in public issues.
+Public servers must use HTTPS. The app permits plain HTTP only for local/private hosts and displays a warning because that traffic is not encrypted. The service uses signed short-lived access tokens, hashed enrollment and refresh tokens, rate-limited child PIN login, and revocable device tokens. Families should keep the service, private network, and hosting environment up to date; never share setup codes, invitation links, PINs, passwords, or credentials in public issues.
 
 ## Contact
 

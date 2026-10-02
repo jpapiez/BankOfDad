@@ -1,4 +1,5 @@
 import CoreImage.CIFilterBuiltins
+import Combine
 import Observation
 import SwiftUI
 import UIKit
@@ -68,7 +69,7 @@ struct FamilyView: View {
                         .contentShape(Rectangle())
                         .onTapGesture { selectedChild = child }
                         Menu {
-                            Button("Generate pairing code") { Task { await viewModel.generatePairing(childId: child.id, service: environment.familyService) } }
+                            Button("Generate child setup QR") { Task { await viewModel.generatePairing(childId: child.id, service: environment.familyService) } }
                                 .accessibilityIdentifier("family.generatePairing")
                             Button("Revoke devices", role: .destructive) { Task { await viewModel.revokeDevices(childId: child.id, service: environment.familyService) } }
                                 .accessibilityIdentifier("family.revokeDevices")
@@ -100,11 +101,20 @@ struct FamilyView: View {
                 Button("Invite co-parent") { Task { await viewModel.invite(email: inviteEmail, service: environment.familyService) } }
                     .accessibilityIdentifier("family.invite")
                 if let invite = viewModel.invite {
-                    ShareLink(item: invite.inviteCode) {
-                        Label("Share invite \(invite.inviteCode)", systemImage: "square.and.arrow.up")
+                    if let payload = invite.qrPayload {
+                        if let image = QRCode.makeImage(from: payload) {
+                            Image(uiImage: image)
+                                .interpolation(.none)
+                                .resizable()
+                                .scaledToFit()
+                                .frame(maxWidth: 220)
+                                .accessibilityLabel("Co-parent invitation QR code")
+                        }
+                        ShareLink(item: payload) {
+                            Label("Share co-parent invitation", systemImage: "square.and.arrow.up")
+                        }
+                        .accessibilityIdentifier("family.inviteShare")
                     }
-                    .accessibilityIdentifier("family.inviteShare")
-                    .accessibilityValue(invite.inviteCode)
                     Text("Expires \(AppFormatters.timestamp(invite.expiresAt))").font(.caption).foregroundStyle(.secondary)
                 }
             }
@@ -162,9 +172,9 @@ struct PairingCodeSheet: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 24) {
-                Text(PairingCode.display(response.code))
-                    .font(.system(.largeTitle, design: .monospaced).bold())
-                    .textSelection(.enabled)
+                Text("Scan to create a username and password or PIN.")
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(.secondary)
                     .accessibilityIdentifier("pairingSheet.code")
                 if let image = QRCode.makeImage(from: response.qrPayload) {
                     Image(uiImage: image)
@@ -183,7 +193,7 @@ struct PairingCodeSheet: View {
                 Spacer()
             }
             .padding()
-            .navigationTitle("Pair child")
+            .navigationTitle("Set Up Child Login")
             .toolbar { Button("Done") { dismiss() }.accessibilityIdentifier("pairingSheet.done") }
             .onReceive(timer) { now = $0 }
         }

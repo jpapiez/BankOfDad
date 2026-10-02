@@ -11,6 +11,7 @@ deployment=${AZ_DEPLOYMENT_NAME:-bankofdad}
 
 die() { echo "update.sh: $*" >&2; exit 1; }
 command -v jq >/dev/null || die "jq is required"
+[[ -n ${PUBLIC_BASE_URL:-} ]] || die "set PUBLIC_BASE_URL to the canonical HTTPS address used by family phones"
 
 outputs=$(az deployment group show -g "$rg" -n "$deployment" --query properties.outputs -o json) \
   || die "no '$deployment' deployment in resource group '$rg'; run deploy.sh first"
@@ -40,6 +41,8 @@ setting() {
   setting API_LOCAL_PORT 8080
   setting POSTGRES_USER bankofdad
   setting POSTGRES_DB bankofdad
+  setting PUBLIC_BASE_URL
+  setting CHILD_PIN_MIN_LENGTH 6
   setting APPLE_CLIENT_ID com.example.bankofdad
   setting APPLE_TEAM_ID
   setting APPLE_KEY_ID

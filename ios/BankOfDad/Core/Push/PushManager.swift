@@ -8,14 +8,28 @@ import UserNotifications
 final class AppRouter {
     var selectedLoanID: UUID?
     var pendingPairingCode: String?
+    var pendingServerConnection: ServerConnectionLink?
+    var pendingEnrollment: PendingEnrollment?
 
     func handle(url: URL) {
+        if let connection = try? ServerConnectionLink(scannedValue: url.absoluteString) {
+            pendingServerConnection = connection
+            return
+        }
+
         guard url.scheme == "bankofdad", url.host == "pair" else { return }
         if let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
            let code = components.queryItems?.first(where: { $0.name == "code" })?.value {
             pendingPairingCode = PairingCode.normalized(code)
         }
+
     }
+}
+
+struct PendingEnrollment: Equatable {
+    let kind: EnrollmentKind
+    let token: String
+    let preview: EnrollmentPreview
 }
 
 @MainActor
@@ -23,11 +37,13 @@ final class PushManager: NSObject, UNUserNotificationCenterDelegate {
     static weak var shared: PushManager?
     private let notificationService: any NotificationService
     private let router: AppRouter
+    private let supportsPush: Bool
     private var latestToken: String?
 
-    init(notificationService: any NotificationService, router: AppRouter) {
+    init(notificationService: any NotificationService, router: AppRouter, supportsPush: Bool = true) {
         self.notificationService = notificationService
         self.router = router
+        self.supportsPush = supportsPush
         super.init()
         UNUserNotificationCenter.current().delegate = self
         PushManager.shared = self
@@ -35,6 +51,7 @@ final class PushManager: NSObject, UNUserNotificationCenterDelegate {
 
     func requestAuthorizationAndRegister() async {
         guard !UITestHooks.skipPushRegistration else { return }
+        guard supportsPush else { return }
         // Demo mode must never show the system push prompt or register a device.
         guard !DemoIsolation.shared.isDemoActive else { return }
         do {

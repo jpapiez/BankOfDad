@@ -6,6 +6,7 @@ import Observation
 final class AuthSession {
     enum State: Equatable {
         case loading
+        case needsServer
         case signedOut
         case unavailable(String)
         case authenticated(UserDto)
@@ -22,13 +23,18 @@ final class AuthSession {
     private(set) var isDemo = false
     var errorMessage: String?
 
-    init(apiClient: APIClient, keychain: KeychainStore, vault: TokenVault) {
+    init(apiClient: APIClient, keychain: KeychainStore, vault: TokenVault, serverConfigured: Bool = true) {
         self.apiClient = apiClient
         self.keychain = keychain
         self.vault = vault
+        if !serverConfigured { state = .needsServer }
     }
 
     func bootstrap() async {
+        guard (try? keychain.loadProfile()) != nil else {
+            state = .needsServer
+            return
+        }
         state = .loading
         do {
             if let stored = try keychain.loadTokens() {
@@ -44,6 +50,24 @@ final class AuthSession {
         } catch {
             state = .unavailable(error.localizedDescription)
         }
+    }
+
+    func markNeedsServer() {
+        currentUser = nil
+        errorMessage = nil
+        state = .needsServer
+    }
+
+    func markSignedOut() {
+        currentUser = nil
+        errorMessage = nil
+        state = .signedOut
+    }
+
+    func markUnavailable(_ message: String) {
+        currentUser = nil
+        errorMessage = message
+        state = .unavailable(message)
     }
 
     func register(email: String, password: String, displayName: String, familyName: String, timeZone: String) async {
@@ -73,6 +97,30 @@ final class AuthSession {
     func acceptInvite(inviteCode: String, email: String, password: String, displayName: String) async {
         await authenticate {
             try await self.apiClient.post("/auth/accept-invite", body: AcceptInviteRequest(inviteCode: PairingCode.normalized(inviteCode), email: email, password: password, displayName: displayName), requiresAuth: false)
+        }
+    }
+
+    func acceptEnrollment(token: String, email: String, password: String, displayName: String) async {
+        await authenticate {
+            try await self.apiClient.post("/auth/accept-enrollment", body: AcceptInviteRequest(inviteCode: token, email: email, password: password, displayName: displayName), requiresAuth: false)
+        }
+    }
+
+    func completeBootstrap(token: String, email: String, password: String, displayName: String, familyName: String, timeZone: String) async {
+        await authenticate {
+            try await self.apiClient.post("/setup/complete", body: BootstrapCompleteRequest(token: token, email: email, password: password, displayName: displayName, familyName: familyName, timeZone: timeZone), requiresAuth: false)
+        }
+    }
+
+    func completeChildEnrollment(token: String, username: String, secret: String, credentialKind: ChildCredentialKind, deviceName: String) async {
+        await authenticate {
+            try await self.apiClient.post("/auth/complete-child-enrollment", body: ChildEnrollmentRequest(token: token, username: username, secret: secret, credentialKind: credentialKind, deviceName: deviceName), requiresAuth: false)
+        }
+    }
+
+    func loginChild(username: String, secret: String, deviceName: String) async {
+        await authenticate {
+            try await self.apiClient.post("/auth/child-login", body: ChildLoginRequest(username: username, secret: secret, deviceName: deviceName), requiresAuth: false)
         }
     }
 
@@ -115,7 +163,7 @@ final class AuthSession {
             await endDemo()
             return
         }
-        try? keychain.deleteTokens()
+        try? keychain.clearTokens()
         await vault.clear()
         currentUser = nil
         state = .signedOut

@@ -64,12 +64,8 @@ final class SettingsTests: BankUITestCase {
         openSettings(parent)
 
         scrollTo(element("settings.deleteAccount")).tap()
-        XCTAssertTrue(app.buttons["Delete My Account"].waitForExistence(timeout: 5))
-        app.buttons["Cancel"].tap()
-        XCTAssertTrue(element("settings.deleteAccount").waitForExistence(timeout: 5))
-
-        scrollTo(element("settings.deleteAccount")).tap()
-        app.buttons["Delete My Account"].tap()
+        XCTAssertTrue(app.buttons["settings.confirmDelete"].waitForExistence(timeout: 5))
+        app.buttons["settings.confirmDelete"].firstMatch.tap()
         element("welcome.parent").waitToAppear(timeout: 15)
         XCTAssertEqual(api.refreshStatus(parent.auth.refreshToken), 401)
     }

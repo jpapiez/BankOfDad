@@ -3,8 +3,9 @@ import UIKit
 
 @MainActor
 struct KidPairingView: View {
-    @Environment(AuthSession.self) private var authSession
+    @Environment(AppEnvironment.self) private var environment
     @Environment(AppRouter.self) private var router
+    private var authSession: AuthSession { environment.authSession }
     @State private var code = ""
     @State private var deviceName = UIDevice.current.name
     @State private var showingScanner = false

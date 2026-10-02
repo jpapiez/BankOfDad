@@ -3,7 +3,8 @@ import SwiftUI
 
 @MainActor
 struct ParentSignInView: View {
-    @Environment(AuthSession.self) private var authSession
+    @Environment(AppEnvironment.self) private var environment
+    private var authSession: AuthSession { environment.authSession }
     @State private var isRegistering = false
     @State private var isAcceptingInvite = false
     @State private var email = ""
@@ -45,24 +46,28 @@ struct ParentSignInView: View {
             }
 
             Section {
-                Button(isRegistering ? "I already have an account" : "Create a parent account") {
-                    isRegistering.toggle(); isAcceptingInvite = false
+                if UITestHooks.isActive {
+                    Button(isRegistering ? "I already have an account" : "Create a parent account") {
+                        isRegistering.toggle(); isAcceptingInvite = false
+                    }
+                    .accessibilityIdentifier("signIn.toggleRegister")
+                    Button(isAcceptingInvite ? "Use regular sign in" : "Join with invite code") {
+                        isAcceptingInvite.toggle(); isRegistering = false
+                    }
+                    .accessibilityIdentifier("signIn.toggleInvite")
                 }
-                .accessibilityIdentifier("signIn.toggleRegister")
-                Button(isAcceptingInvite ? "Use regular sign in" : "Join with invite code") {
-                    isAcceptingInvite.toggle(); isRegistering = false
-                }
-                .accessibilityIdentifier("signIn.toggleInvite")
             }
 
-            Section("Sign in with Apple") {
-                SignInWithAppleButton(.signIn) { request in
-                    request.requestedScopes = [.fullName, .email]
-                } onCompletion: { result in
-                    Task { await handleApple(result) }
+            if environment.serverProfile?.capabilities.apple == true {
+                Section("Sign in with Apple") {
+                    SignInWithAppleButton(.signIn) { request in
+                        request.requestedScopes = [.fullName, .email]
+                    } onCompletion: { result in
+                        Task { await handleApple(result) }
+                    }
+                    .frame(height: 46)
+                    .accessibilityIdentifier("signIn.apple")
                 }
-                .frame(height: 46)
-                .accessibilityIdentifier("signIn.apple")
             }
         }
         .navigationTitle("Bank access")
