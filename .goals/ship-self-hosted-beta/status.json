@@ -28,6 +28,11 @@
         "app_store_connect_upload": "succeeded; package is processing",
         "beta_review_submission": "not submitted; awaiting explicit user confirmation"
       }
+    },
+    {
+      "iteration": 1,
+      "verdict": "FAIL",
+      "summary": "Docker image build failed twice during NuGet TLS restore, and App Store Connect processing/selection readiness was not independently evidenced."
     }
   ]
 }
