@@ -179,7 +179,6 @@ public sealed class TestHooksTests : IAsyncLifetime
             builder.ConfigureAppConfiguration(config => config.AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["ConnectionStrings:Default"] = connectionString,
-                ["Apple:ClientId"] = "com.example.bankofdad",
                 ["TestHooks:Enabled"] = hooksEnabled
             }));
             builder.ConfigureServices(services =>
@@ -188,8 +187,6 @@ public sealed class TestHooksTests : IAsyncLifetime
                 services.AddDbContext<BankOfDadDbContext>(options => options.UseNpgsql(connectionString));
                 services.RemoveAll<IClock>();
                 services.AddSingleton<IClock>(clock);
-                services.RemoveAll<IAppleTokenValidator>();
-                services.AddScoped<IAppleTokenValidator, NoAppleTokenValidator>();
                 services.RemoveAll<IPushSender>();
                 services.AddSingleton<IPushSender, NoopPushSender>();
             });
@@ -199,11 +196,6 @@ public sealed class TestHooksTests : IAsyncLifetime
     private sealed class FakeClock(DateTimeOffset now) : IClock
     {
         public DateTimeOffset UtcNow { get; } = now;
-    }
-
-    private sealed class NoAppleTokenValidator : IAppleTokenValidator
-    {
-        public Task<AppleUser> ValidateAsync(string identityToken, CancellationToken cancellationToken = default) => throw new InvalidOperationException("Not used.");
     }
 
     private sealed class NoopPushSender : IPushSender

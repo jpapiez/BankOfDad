@@ -61,13 +61,6 @@ final class OnboardingTests: BankUITestCase {
         XCTAssertTrue(element("signIn.submit").exists, "Still on the sign-in form")
     }
 
-    func testSignInWithAppleButtonIsOffered() {
-        // Sign in with Apple needs a real Apple ID round-trip, so only its presence is verified.
-        launch()
-        element("welcome.parent").waitToAppear(timeout: 15).tap()
-        XCTAssertTrue(element("signIn.apple").waitForExistence(timeout: 5))
-    }
-
     func testCoParentJoinsWithAnInviteCode() throws {
         let parent = try api.registerParent(name: "Inviter")
         let invite = try api.invite(parent)

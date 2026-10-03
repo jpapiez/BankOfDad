@@ -34,11 +34,6 @@ services:
       ASPNETCORE_HTTP_PORTS: "8080"
       ConnectionStrings__Default: "Host=db;Port=5432;Database=${POSTGRES_DB:-bankofdad};Username=${POSTGRES_USER:-bankofdad};Password=${POSTGRES_PASSWORD:-bankofdad-dev}"
       Jwt__SigningKey: ${JWT_SIGNING_KEY:-dev-only-signing-key-change-me-0123456789abcdef}
-      Apple__ClientId: ${APPLE_CLIENT_ID:-com.example.bankofdad}
-      Apple__TeamId: ${APPLE_TEAM_ID:-}
-      Apple__KeyId: ${APPLE_KEY_ID:-}
-      Apple__KeyPath: ${APPLE_KEY_PATH:-/run/secrets/apple/SignInWithAppleKey.p8}
-      Apple__TokenEncryptionKey: ${APPLE_TOKEN_ENCRYPTION_KEY:-}
       Apns__KeyId: ${APNS_KEY_ID:-}
       Apns__TeamId: ${APNS_TEAM_ID:-}
       Apns__BundleId: ${APNS_BUNDLE_ID:-com.example.bankofdad}

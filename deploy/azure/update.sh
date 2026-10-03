@@ -40,10 +40,6 @@ setting() {
   setting API_LOCAL_PORT 8080
   setting POSTGRES_USER bankofdad
   setting POSTGRES_DB bankofdad
-  setting APPLE_CLIENT_ID com.example.bankofdad
-  setting APPLE_TEAM_ID
-  setting APPLE_KEY_ID
-  setting APPLE_TOKEN_ENCRYPTION_KEY
   setting APNS_KEY_ID
   setting APNS_TEAM_ID
   setting APNS_BUNDLE_ID com.example.bankofdad
@@ -51,9 +47,6 @@ setting() {
   printf 'BACKUP_STORAGE_ACCOUNT=%s\nBACKUP_CONTAINER=%s\n' "$account" "$container"
 } > "$bundle/settings.env"
 
-if [[ -n ${APPLE_KEY_FILE:-} ]]; then
-  cp "$APPLE_KEY_FILE" "$bundle/SignInWithAppleKey.p8"
-fi
 if [[ -n ${APNS_KEY_FILE:-} ]]; then
   cp "$APNS_KEY_FILE" "$bundle/AuthKey.p8"
 fi

@@ -3,11 +3,9 @@ namespace BankOfDad.Api.Services;
 using System.Data;
 using BankOfDad.Domain;
 using BankOfDad.Infrastructure.Data;
-using BankOfDad.Infrastructure.Security;
-using BankOfDad.Infrastructure.Time;
 using Microsoft.EntityFrameworkCore;
 
-public sealed class AccountDeletionService(BankOfDadDbContext db, IAppleAuthorizationService appleAuthorization, IClock clock)
+public sealed class AccountDeletionService(BankOfDadDbContext db)
 {
     public async Task DeleteParentAsync(Guid userId, CancellationToken ct)
     {
@@ -18,40 +16,6 @@ public sealed class AccountDeletionService(BankOfDadDbContext db, IAppleAuthoriz
             .SingleOrDefaultAsync(ct)
             .ConfigureAwait(false);
         if (existing is null) throw new ApiException(404, "Parent account not found.");
-
-        if (existing.AppleDeletionStartedAt is not null)
-        {
-            throw new ApiException(409, "Account deletion is already in progress.");
-        }
-        existing.AppleDeletionStartedAt = clock.UtcNow;
-        await db.SaveChangesAsync(ct).ConfigureAwait(false);
-
-        if (existing.AppleSubject is not null)
-        {
-            var tokens = await db.AppleRefreshTokens
-                .Where(x => x.UserId == userId && x.RevokedAt == null)
-                .OrderBy(x => x.CreatedAt)
-                .ToListAsync(ct)
-                .ConfigureAwait(false);
-            if (tokens.Count == 0)
-            {
-                throw new ApiException(409, "Sign in with Apple must be completed again before this account can be deleted.", "Sign out, sign in with Apple again, then retry account deletion.");
-            }
-
-            foreach (var token in tokens)
-            {
-                try
-                {
-                    await appleAuthorization.RevokeAsync(token.TokenEncrypted, ct).ConfigureAwait(false);
-                }
-                catch (AppleAuthorizationException)
-                {
-                    throw new ApiException(503, "Apple authorization could not be revoked.", "Your account was not deleted. Please try again.");
-                }
-                token.RevokedAt = clock.UtcNow;
-            }
-            await db.SaveChangesAsync(ct).ConfigureAwait(false);
-        }
 
         var familyId = existing.FamilyId;
         var remainingParentId = await db.Users

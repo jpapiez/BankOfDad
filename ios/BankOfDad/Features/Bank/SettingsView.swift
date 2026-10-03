@@ -77,7 +77,7 @@ struct SettingsView: View {
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("This cannot be undone. Your sign-in credentials, sessions, and Sign in with Apple authorization (if used) will be revoked. If you are the last parent, all private family data will be permanently deleted.")
+            Text("This cannot be undone. Your sign-in credentials and sessions will be revoked. If you are the last parent, all private family data will be permanently deleted.")
         }
     }
 }

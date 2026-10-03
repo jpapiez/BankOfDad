@@ -9,7 +9,6 @@ public sealed class BankOfDadDbContext(DbContextOptions<BankOfDadDbContext> opti
 {
     public DbSet<Family> Families => Set<Family>();
     public DbSet<User> Users => Set<User>();
-    public DbSet<AppleRefreshToken> AppleRefreshTokens => Set<AppleRefreshToken>();
     public DbSet<FamilyInvite> FamilyInvites => Set<FamilyInvite>();
     public DbSet<PairingCode> PairingCodes => Set<PairingCode>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
@@ -63,18 +62,9 @@ public sealed class BankOfDadDbContext(DbContextOptions<BankOfDadDbContext> opti
             b.Property(x => x.DisplayName).HasMaxLength(100).IsRequired();
             b.Property(x => x.Email).HasMaxLength(320);
             b.Property(x => x.NormalizedEmail).HasMaxLength(320);
-            b.Property(x => x.AppleSubject).HasMaxLength(200);
-            b.Property(x => x.AppleDeletionStartedAt);
             b.Property(x => x.AvatarColor).HasMaxLength(20);
             b.HasIndex(x => x.NormalizedEmail).IsUnique().HasFilter("\"NormalizedEmail\" IS NOT NULL");
-            b.HasIndex(x => x.AppleSubject).IsUnique().HasFilter("\"AppleSubject\" IS NOT NULL");
             b.HasIndex(x => new { x.FamilyId, x.Role });
-        });
-
-        modelBuilder.Entity<AppleRefreshToken>(b =>
-        {
-            b.Property(x => x.TokenEncrypted).HasMaxLength(2048).IsRequired();
-            b.HasIndex(x => new { x.UserId, x.RevokedAt }).HasDatabaseName("IX_AppleRefreshTokens_UserId_RevokedAt");
         });
 
         modelBuilder.Entity<FamilyInvite>(b =>
