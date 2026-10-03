@@ -266,6 +266,11 @@
       "iteration": 9,
       "verdict": "FAIL",
       "summary": "All three directed fixes and the iOS unit/focused/full UI gates pass independently, but current external-group selectability and persisted live beta metadata remain independently unverified."
+    },
+    {
+      "iteration": 10,
+      "verdict": "FAIL",
+      "summary": "The status-history anomaly is corrected without product changes or readiness overclaims, and all directed fixes remain intact, but live App Store Connect external-group selectability and persisted beta metadata remain independently unverified."
     }
   ]
 }
