@@ -143,6 +143,11 @@
         "beta_review_submission": "not submitted; no build/group selection or metadata was changed"
       },
       "blocker": "A safely usable authenticated read-only App Store Connect session or transient API-key environment is still required to verify build processing/availability, external-testing readiness, and persisted review metadata without storing credentials."
+    },
+    {
+      "iteration": 5,
+      "verdict": "FAIL",
+      "summary": "Authenticated uploader logs prove build 20261002.2202 reached App Store Connect processing, but external-testing selection and saved beta metadata remain independently unverifiable."
     }
   ]
 }
