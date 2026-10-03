@@ -7,6 +7,9 @@
 # API_BASE_URL. Xcode must be signed in to that team (Xcode > Settings > Accounts), and the
 # app must already exist in App Store Connect. See ios/README.md.
 #
+# If Config/Local.xcconfig is missing it is copied from $BANKOFDAD_DEPLOY_DIR/ios.xcconfig
+# (default ~/s/bankofdad-deploy, the private deploy repo).
+#
 # Environment:
 #   BUILD_NUMBER   CFBundleVersion (default: UTC timestamp YYYYMMDD.HHMM, always increasing)
 #   UPLOAD=0       export a signed .ipa to ios/build/export instead of uploading
@@ -18,6 +21,11 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 die() { echo "testflight.sh: $*" >&2; exit 1; }
 
+# Fall back to the private deploy repo's copy so any worktree can ship.
+deploy_dir="${BANKOFDAD_DEPLOY_DIR:-$HOME/s/bankofdad-deploy}"
+if [[ ! -f Config/Local.xcconfig && -f $deploy_dir/ios.xcconfig ]]; then
+  cp "$deploy_dir/ios.xcconfig" Config/Local.xcconfig
+fi
 [[ -f Config/Local.xcconfig ]] || die "create Config/Local.xcconfig from Config/Local.xcconfig.example first"
 command -v xcodegen >/dev/null || die "install XcodeGen: brew install xcodegen"
 
