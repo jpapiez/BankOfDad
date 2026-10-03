@@ -259,6 +259,11 @@
         "Demo exit returns needsServer without a configured profile and signedOut with one",
         "UI invitation test consumes the exact generated enrollment payload"
       ]
+    },
+    {
+      "iteration": 9,
+      "verdict": "FAIL",
+      "summary": "All three directed fixes and the iOS unit/focused/full UI gates pass independently, but current external-group selectability and persisted live beta metadata remain independently unverified."
     }
   ]
 }
