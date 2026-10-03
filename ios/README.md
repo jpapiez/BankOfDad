@@ -30,9 +30,9 @@ TestFlight installs the app on real iPhones without an App Store listing. You ne
    - `BANKOFDAD_BUNDLE_ID`: a reverse-DNS ID you own, e.g. `com.yourname.bankofdad`. It's permanent once the app exists in App Store Connect;
    - `DEVELOPMENT_TEAM`: your team ID, from developer.apple.com > Account > Membership details.
 2. **Xcode:** sign in under Xcode > Settings > Accounts. If your team has never had a device registered, connect your iPhone and run the app from Xcode once first. Archiving needs a development profile, and Apple only issues one when the team has at least one device.
-3. **Register the bundle ID:** run `UPLOAD=0 ./scripts/testflight.sh` once. Xcode's automatic signing registers the ID with the Sign in with Apple and Push Notifications capabilities.
+3. **Register the bundle ID:** run `UPLOAD=0 ./scripts/testflight.sh` once. Xcode's automatic signing registers the ID with the Push Notifications capability.
 4. **App Store Connect:** under Apps, click + > New App. Choose iOS, pick your bundle ID, and enter any SKU. The name must be unique across the App Store, but the home-screen name stays "Bank of Dad".
-5. **Server:** set `APPLE_CLIENT_ID` and `APNS_BUNDLE_ID` to the bundle ID. Configure `APPLE_TEAM_ID`, `APPLE_KEY_ID`, `APPLE_KEY_PATH`, and a stable 32-byte base64 `APPLE_TOKEN_ENCRYPTION_KEY` so authorization codes can be exchanged, Apple refresh tokens encrypted at rest, and Sign in with Apple authorization revoked during account deletion. Install the Sign in with Apple `.p8` at the configured path. For push, configure its Apple private key, `APNS_KEY_ID`, and `APNS_TEAM_ID`. Set `APNS_USE_SANDBOX=false`, because TestFlight builds register production push tokens.
+5. **Server:** set `APNS_BUNDLE_ID` to the bundle ID. For push, configure its Apple private key, `APNS_KEY_ID`, and `APNS_TEAM_ID`. Set `APNS_USE_SANDBOX=false`, because TestFlight builds register production push tokens.
 
 ### Upload a build
 
@@ -86,7 +86,7 @@ xcrun simctl launch --console booted com.example.bankofdad -DemoMode -DemoRole k
 
 ## Push notifications
 
-`BankOfDad.entitlements` enables Sign in with Apple, APNs (development; distribution signing switches it to production), and remote-notification background mode. Configure an Apple developer team, App ID, APNs key/certificate, and backend push provider before testing device push. APNs registration is skipped until a user is authenticated; tokens are posted to `/api/v1/devices` as sandbox in Debug and production otherwise.
+`BankOfDad.entitlements` enables APNs (development; distribution signing switches it to production), and remote-notification background mode. Configure an Apple developer team, App ID, APNs key/certificate, and backend push provider before testing device push. APNs registration is skipped until a user is authenticated; tokens are posted to `/api/v1/devices` as sandbox in Debug and production otherwise.
 
 ## Pairing notes
 
@@ -132,6 +132,5 @@ CI skips this target (`-skip-testing:BankOfDadUITests`) because it needs the bac
 
 ### Not automated
 
-- **Sign in with Apple**: the tests only assert that the button is offered.
 - **QR scanning** needs a camera. The same `bankofdad://pair?code=` link is tested through deep links instead.
 - **Real APNs delivery**: push registration is skipped under test. Notifications are verified through the in-app Inbox and the API.

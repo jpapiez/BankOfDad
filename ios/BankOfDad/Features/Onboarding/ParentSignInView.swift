@@ -1,4 +1,3 @@
-import AuthenticationServices
 import SwiftUI
 
 @MainActor
@@ -54,16 +53,6 @@ struct ParentSignInView: View {
                 }
                 .accessibilityIdentifier("signIn.toggleInvite")
             }
-
-            Section("Sign in with Apple") {
-                SignInWithAppleButton(.signIn) { request in
-                    request.requestedScopes = [.fullName, .email]
-                } onCompletion: { result in
-                    Task { await handleApple(result) }
-                }
-                .frame(height: 46)
-                .accessibilityIdentifier("signIn.apple")
-            }
         }
         .navigationTitle("Bank access")
     }
@@ -86,25 +75,6 @@ struct ParentSignInView: View {
             } else {
                 await authSession.login(email: email, password: password)
             }
-        }
-    }
-
-    private func handleApple(_ result: Result<ASAuthorization, Error>) async {
-        switch result {
-        case .success(let authorization):
-            guard let credential = authorization.credential as? ASAuthorizationAppleIDCredential,
-                  let tokenData = credential.identityToken,
-                  let token = String(data: tokenData, encoding: .utf8),
-                  let codeData = credential.authorizationCode,
-                  let code = String(data: codeData, encoding: .utf8) else {
-                authSession.errorMessage = "Apple did not return the authorization needed to create a revocable account."
-                return
-            }
-            let nameParts = [credential.fullName?.givenName, credential.fullName?.familyName].compactMap { $0 }
-            let name = nameParts.isEmpty ? nil : nameParts.joined(separator: " ")
-            await authSession.signInWithApple(identityToken: token, authorizationCode: code, displayName: name, familyName: familyName.isEmpty ? nil : familyName, timeZone: TimeZone.current.identifier, inviteCode: inviteCode.isEmpty ? nil : inviteCode)
-        case .failure(let error):
-            authSession.errorMessage = error.localizedDescription
         }
     }
 }
