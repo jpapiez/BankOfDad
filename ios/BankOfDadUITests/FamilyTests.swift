@@ -146,10 +146,13 @@ final class FamilyTests: BankUITestCase {
         scrollTo(element("family.invite")).tap()
         let share = scrollTo(element("family.inviteShare")).waitToAppear()
         XCTAssertTrue(share.label.contains("Share co-parent invitation"), share.label)
+        let payload = try XCTUnwrap(share.value as? String, "The share control must expose the exact generated invitation payload")
+        let components = try XCTUnwrap(URLComponents(string: payload))
+        let token = try XCTUnwrap(components.queryItems?.first(where: { $0.name == "token" })?.value)
+        XCTAssertEqual(components.queryItems?.first(where: { $0.name == "kind" })?.value, "parent")
         XCTAssertTrue(anyContaining("Expires").exists)
 
-        let invite = try api.invite(parent, email: email)
-        let coParent = try api.acceptInvite(code: invite.inviteCode, email: email, name: "Mama")
+        let coParent = try api.acceptEnrollment(token: token, email: email, name: "Mama")
         XCTAssertEqual(coParent.user.role, "parent")
         XCTAssertTrue(try api.family(parent).parents.contains { $0.displayName == "Mama" })
     }

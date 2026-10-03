@@ -24,7 +24,7 @@ struct RootView: View {
             case .unavailable(let message):
                 VStack(spacing: 16) {
                     EmptyStateView(systemImage: "wifi.exclamationmark", title: "Can't reach the Bank", message: message)
-                    Button("Try again") { Task { await authSession.bootstrap() } }
+                    Button("Try again") { Task { await environment.bootstrap() } }
                         .buttonStyle(.borderedProminent)
                     Button("Sign out", role: .destructive) { Task { await authSession.signOutLocal() } }
                 }

@@ -7,6 +7,36 @@ final class DemoModeTests: XCTestCase {
 
     private func makeStore() -> DemoStore { DemoStore(referenceDate: reference) }
 
+    @MainActor
+    func testExitingDemoWithoutAConfiguredServerReturnsToNeedsServer() async {
+        let environment = AppEnvironment()
+        await environment.forgetServer()
+        await environment.enterDemo(role: .parent, referenceDate: reference)
+
+        await environment.exitDemo()
+
+        XCTAssertFalse(environment.isDemo)
+        XCTAssertEqual(environment.authSession.state, .needsServer)
+    }
+
+    @MainActor
+    func testExitingDemoWithAConfiguredServerReturnsToSignedOut() async throws {
+        let profile = ServerProfile(
+            id: UUID(),
+            origin: try ServerOriginPolicy.validate("http://localhost:8080"),
+            familyName: "Configured Family",
+            capabilities: .legacy,
+            childPin: .standard
+        )
+        let environment = AppEnvironment(testingProfile: profile)
+        await environment.enterDemo(role: .parent, referenceDate: reference)
+
+        await environment.exitDemo()
+
+        XCTAssertFalse(environment.isDemo)
+        XCTAssertEqual(environment.authSession.state, .signedOut)
+    }
+
     // MARK: - Seed
 
     func testSeedIsDeterministicForTheSameReferenceDate() async throws {

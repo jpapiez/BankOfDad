@@ -114,6 +114,7 @@ struct FamilyView: View {
                             Label("Share co-parent invitation", systemImage: "square.and.arrow.up")
                         }
                         .accessibilityIdentifier("family.inviteShare")
+                        .accessibilityValue(payload)
                     }
                     Text("Expires \(AppFormatters.timestamp(invite.expiresAt))").font(.caption).foregroundStyle(.secondary)
                 }

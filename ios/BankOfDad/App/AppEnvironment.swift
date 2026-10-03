@@ -61,6 +61,29 @@ final class AppEnvironment {
         self.notificationService = components.notifications
     }
 
+    #if DEBUG
+    init(testingProfile profile: ServerProfile?) {
+        let keychain = KeychainStore()
+        let router = AppRouter()
+        let components = Self.makeLiveComponents(profile: profile, keychain: keychain, router: router)
+        self.keychain = keychain
+        self.router = router
+        self.serverProfile = profile
+        self.vault = components.vault
+        self.apiClient = components.apiClient
+        self.authSession = components.authSession
+        self.pushManager = components.pushManager
+        self.liveFamilyService = components.family
+        self.liveLoanService = components.loans
+        self.liveBillService = components.bills
+        self.liveNotificationService = components.notifications
+        self.familyService = components.family
+        self.loanService = components.loans
+        self.billService = components.bills
+        self.notificationService = components.notifications
+    }
+    #endif
+
     func bootstrap() async {
         guard let profile = serverProfile else {
             authSession.markNeedsServer()
@@ -154,6 +177,9 @@ final class AppEnvironment {
         notificationService = liveNotificationService
         DemoIsolation.shared.setDemoActive(false)
         await authSession.endDemo()
+        if serverProfile == nil {
+            authSession.markNeedsServer()
+        }
     }
 
     private func replaceLive(with profile: ServerProfile?) {
