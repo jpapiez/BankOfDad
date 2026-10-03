@@ -121,6 +121,16 @@ if (!env.IsEnvironment("Testing"))
 }
 
 var app = builder.Build();
+var versionInfo = VersionInfo.FromConfiguration(app.Configuration);
+app.Use(async (context, next) =>
+{
+    context.Response.OnStarting(() =>
+    {
+        context.Response.Headers["X-BankOfDad-Version"] = $"{versionInfo.Version}+{versionInfo.Commit} api{versionInfo.ApiLevel}";
+        return Task.CompletedTask;
+    });
+    await next();
+});
 app.UseExceptionHandler(errorApp => errorApp.Run(async context =>
 {
     var ex = context.Features.Get<IExceptionHandlerFeature>()?.Error;
@@ -161,6 +171,7 @@ await ApplyMigrationsAsync(app.Services, app.Logger);
 app.MapGet("/health", async (BankOfDadDbContext db, CancellationToken ct) => await db.Database.CanConnectAsync(ct) ? Results.Text("Healthy") : Results.Problem("Database unavailable", statusCode: 503));
 
 var api = app.MapGroup("/api/v1");
+api.MapGet("/version", () => Results.Ok(versionInfo));
 var auth = api.MapGroup("/auth");
 if (!env.IsEnvironment("Testing")) auth.RequireRateLimiting("auth");
 

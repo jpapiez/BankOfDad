@@ -11,6 +11,9 @@ RUN dotnet publish src/BankOfDad.Api/BankOfDad.Api.csproj -c Release -a "$TARGET
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
 WORKDIR /app
 EXPOSE 8080
+ARG BANKOFDAD_VERSION=dev
+ARG BANKOFDAD_COMMIT=unknown
+ENV BANKOFDAD_VERSION=$BANKOFDAD_VERSION BANKOFDAD_COMMIT=$BANKOFDAD_COMMIT
 ENV ASPNETCORE_HTTP_PORTS=8080
 COPY --from=build /app/publish .
 USER $APP_UID
