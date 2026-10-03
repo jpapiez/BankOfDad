@@ -1,9 +1,10 @@
 {
   "goal_id": "ship-self-hosted-beta",
-  "status": "ready_for_inspection",
-  "iteration": 9,
+  "status": "blocked",
+  "iteration": 10,
   "builder_model": "GPT:5.6-Luna",
   "inspector_model": "GPT:5.6-Sol",
+  "blocker": "A safely usable authenticated, read-only App Store Connect session or transient API-key environment is still required to verify current build selectability for external testing and persisted self-hosting/offline-demo beta review metadata; credentials must not be stored.",
   "initial_sha": "44ecfd4324a18250f78cd6e4eb574c2ce88e5827",
   "created_at": "2026-10-02T20:24:28Z",
   "history": [
