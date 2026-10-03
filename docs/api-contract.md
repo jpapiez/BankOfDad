@@ -192,6 +192,9 @@ Any authenticated family member can read; children only ever see their own bills
 ### Health
 `GET /health` → 200 `Healthy` (checks DB).
 
+### Version
+`GET /api/v1/version` (anonymous) → 200 `{ version, commit, apiLevel, minClientApiLevel }`. `version` and `commit` come from the image build (`BANKOFDAD_VERSION`, `BANKOFDAD_COMMIT`; `dev`/`unknown` for local builds). `apiLevel` is the contract revision this server implements; `minClientApiLevel` is the oldest app contract it still supports. Every response also carries `X-BankOfDad-Version: <version>+<commit> api<level>`. The iOS app shows both sides in Settings and warns when `client.apiLevel < server.minClientApiLevel` or `server.apiLevel < client.minServerApiLevel`. A server that answers 404 for this route predates version reporting and must be updated. Bump `VersionInfo.CurrentApiLevel` whenever a change needs a matching app change.
+
 ### Testing hooks (Development only, parent only, caller's family only)
 These routes exist **only** when `ASPNETCORE_ENVIRONMENT=Development` **and** `TestHooks:Enabled=true` (`TestHooks__Enabled` / `TEST_HOOKS_ENABLED` in docker compose, default `false`). In every other configuration they are not mapped, so requests get 404. The iOS UI test suite uses them. **Never enable them in production.**
 

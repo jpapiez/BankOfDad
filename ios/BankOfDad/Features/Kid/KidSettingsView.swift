@@ -15,6 +15,7 @@ struct KidSettingsView: View {
                         .foregroundStyle(.secondary)
                 }
             }
+            VersionSection(idPrefix: "kidSettings")
             if environment.isDemo {
                 DemoSettingsSection()
             } else {

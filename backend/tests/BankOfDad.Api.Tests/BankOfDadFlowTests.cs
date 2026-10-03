@@ -56,6 +56,22 @@ public sealed class BankOfDadFlowTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Version_endpoint_is_anonymous_and_every_response_reports_the_server_version()
+    {
+        Use(null);
+        var response = await _client.GetAsync("/api/v1/version");
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var info = await response.Content.ReadFromJsonAsync<VersionInfo>(Json);
+        info!.ApiLevel.Should().Be(VersionInfo.CurrentApiLevel);
+        info.MinClientApiLevel.Should().Be(VersionInfo.CurrentMinClientApiLevel);
+        response.Headers.GetValues("X-BankOfDad-Version").Single().Should().Contain($"api{VersionInfo.CurrentApiLevel}");
+        (await _client.GetAsync("/health")).Headers.Contains("X-BankOfDad-Version").Should().BeTrue();
+        var unauthorized = await _client.GetAsync("/api/v1/family");
+        unauthorized.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+        unauthorized.Headers.Contains("X-BankOfDad-Version").Should().BeTrue();
+    }
+
+    [Fact]
     public async Task Complete_parent_child_loan_flow_matches_contract()
     {
         var parentAuth = await Post<AuthResponse>("/api/v1/auth/register", new RegisterRequest("dad@example.com", "Password123!", "Dad", "Smith", "America/Los_Angeles"), HttpStatusCode.Created);

@@ -39,3 +39,27 @@ final class UtilityTests: XCTestCase {
         XCTAssertFalse(Color.isLight(hex: "not a color"))
     }
 }
+
+final class VersionCompatibilityTests: XCTestCase {
+    private func server(api: Int, minClient: Int) -> ServerVersion {
+        ServerVersion(version: "build-1", commit: "abcdef0", apiLevel: api, minClientApiLevel: minClient)
+    }
+
+    func testCompatibleWhenLevelsOverlap() {
+        XCTAssertEqual(VersionCompatibility.evaluate(server: server(api: 2, minClient: 1), clientApiLevel: 2, minServerApiLevel: 1), .compatible)
+    }
+
+    func testAppTooOldWhenServerRequiresNewerClient() {
+        XCTAssertEqual(VersionCompatibility.evaluate(server: server(api: 3, minClient: 3), clientApiLevel: 2, minServerApiLevel: 1), .appTooOld)
+    }
+
+    func testServerTooOldWhenAppNeedsNewerServer() {
+        XCTAssertEqual(VersionCompatibility.evaluate(server: server(api: 1, minClient: 1), clientApiLevel: 2, minServerApiLevel: 2), .serverTooOld)
+    }
+
+    func testServerVersionDecodes() throws {
+        let json = #"{"version":"build-7","commit":"abc","apiLevel":2,"minClientApiLevel":1}"#
+        let decoded = try APIClient.makeDecoder().decode(ServerVersion.self, from: Data(json.utf8))
+        XCTAssertEqual(decoded, ServerVersion(version: "build-7", commit: "abc", apiLevel: 2, minClientApiLevel: 1))
+    }
+}

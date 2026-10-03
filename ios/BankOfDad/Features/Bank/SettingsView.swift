@@ -47,6 +47,7 @@ struct SettingsView: View {
                 Button("Save changes") { Task { await viewModel.save(service: environment.familyService) } }
                     .accessibilityIdentifier("settings.save")
             }
+            VersionSection(idPrefix: "settings")
             if environment.isDemo {
                 DemoSettingsSection()
             } else {
