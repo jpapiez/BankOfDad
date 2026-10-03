@@ -1,7 +1,7 @@
 {
   "goal_id": "ship-self-hosted-beta",
-  "status": "blocked",
-  "iteration": 4,
+  "status": "ready_for_inspection",
+  "iteration": 5,
   "builder_model": "GPT:5.6-Luna",
   "inspector_model": "GPT:5.6-Sol",
   "initial_sha": "44ecfd4324a18250f78cd6e4eb574c2ce88e5827",
@@ -119,6 +119,30 @@
       "iteration": 4,
       "verdict": "FAIL",
       "summary": "All product and local quality gates passed, including reproducible UI signal-kill retry handling, but live App Store Connect build, metadata, and external-testing readiness remain independently unverifiable."
+    },
+    {
+      "iteration": 5,
+      "status": "ready_for_inspection",
+      "completed_at": "2026-10-03T05:13:00Z",
+      "quality_gates": {
+        "backend_restore": "passed",
+        "backend_release_build_warnings_as_errors": "passed: 0 warnings, 0 errors",
+        "backend_tests": "passed: 77 tests",
+        "docker_build": "passed",
+        "docker_health": "passed: curl returned Healthy",
+        "ios_project_generation": "passed",
+        "ios_unit_tests": "passed: 36 tests",
+        "ios_onboarding_ui_tests": "passed: 10 tests",
+        "ios_complete_ui_suite": "passed: 71 tests",
+        "signed_release_archive_export": "passed: 20261003.0511; Apple Distribution signed, beta-reports-active=true, get-task-allow=false"
+      },
+      "release": {
+        "app_store_connect_build": "blocked: no safely usable authenticated App Store Connect account, API key, verified URL, or accessibility tree; no upload attempted",
+        "external_testing_selection": "blocked: live App Store Connect state unavailable; no selection changed",
+        "saved_metadata": "blocked: live App Store Connect state unavailable; no metadata changed",
+        "beta_review_submission": "not submitted; no build/group selection or metadata was changed"
+      },
+      "blocker": "A safely usable authenticated read-only App Store Connect session or transient API-key environment is still required to verify build processing/availability, external-testing readiness, and persisted review metadata without storing credentials."
     }
   ]
 }
