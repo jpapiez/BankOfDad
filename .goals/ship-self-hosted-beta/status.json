@@ -237,11 +237,6 @@
       "summary": "All retained local gates pass, the Builder trailers parse correctly, and build 20261002.2202 is proven uploaded and processing, but current external-group selectability and persisted live beta metadata remain independently unverifiable."
     },
     {
-      "iteration": 3,
-      "verdict": "FAIL",
-      "summary": "All local quality gates and the signal-kill retry behavior pass, and build 20261002.2202 is proven uploaded and processing, but current external-group selectability and persisted live beta metadata remain independently unverifiable."
-    },
-    {
       "iteration": 9,
       "status": "ready_for_inspection",
       "completed_at": "2026-10-03T11:02:20.203191Z",
@@ -254,6 +249,13 @@
         "signed_release_archive_export": "passed: 20261003.1101",
         "diff_check": "passed"
       },
+      "release": {
+        "app_store_connect_build": "retained upload evidence proves build 20261002.2202 reached PROCESSING with no errors or warnings; current live processing/availability remains unverified",
+        "external_testing_selection": "blocked: no safely usable authenticated App Store Connect session or API credential is available; no selection changed",
+        "saved_metadata": "blocked: live beta description and review notes remain independently unverifiable; no metadata changed",
+        "beta_review_submission": "not submitted; no build/group selection or metadata was changed"
+      },
+      "blocker": "A safely usable authenticated, read-only App Store Connect session or transient API-key environment is still required to verify current build selectability and persisted beta review metadata; credentials must not be stored.",
       "product_fixes": [
         "Root retry routes through verified AppEnvironment.bootstrap",
         "Demo exit returns needsServer without a configured profile and signedOut with one",
