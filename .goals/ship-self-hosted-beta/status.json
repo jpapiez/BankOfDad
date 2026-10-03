@@ -114,6 +114,11 @@
         "beta_review_submission": "not submitted; no build/group selection or metadata was changed"
       },
       "blocker": "Provide a safely usable authenticated read-only App Store Connect session or transient API-key environment for upload and live verification; do not commit or persist credentials."
+    },
+    {
+      "iteration": 4,
+      "verdict": "FAIL",
+      "summary": "All product and local quality gates passed, including reproducible UI signal-kill retry handling, but live App Store Connect build, metadata, and external-testing readiness remain independently unverifiable."
     }
   ]
 }
