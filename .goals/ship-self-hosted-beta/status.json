@@ -84,6 +84,11 @@
         "saved_metadata": "blocked: live App Store Connect state unavailable; repository source metadata remains unchanged",
         "beta_review_submission": "not submitted; no build/group selection or metadata was changed"
       }
+    },
+    {
+      "iteration": 3,
+      "verdict": "FAIL",
+      "summary": "All code and quality gates passed, including reproducible UI signal-kill retry handling, but live App Store Connect build, metadata, and external-testing readiness remain independently unverifiable."
     }
   ]
 }
