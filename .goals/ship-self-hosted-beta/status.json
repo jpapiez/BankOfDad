@@ -55,7 +55,12 @@
         "external_testing_selection": "verified live: Extended Family is available as an External group in Add Group; no selection changed",
         "saved_metadata": "verified live: self-hosting/offline Explore Demo beta description and review notes persisted",
         "beta_review_submission": "not submitted; awaiting explicit user confirmation"
-    }
+      }
+    },
+    {
+      "iteration": 2,
+      "verdict": "FAIL",
+      "summary": "Docker and backend gates passed, but the focused onboarding UI command failed twice and live App Store Connect build, metadata, and external-testing readiness could not be independently verified."
     }
   ]
 }
