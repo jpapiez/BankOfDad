@@ -230,6 +230,11 @@
         "beta_review_submission": "not submitted; no build/group selection or metadata was changed"
       },
       "blocker": "Safari/Edge expose no verified URL or accessibility tree, Edge is not on App Store Connect, and no API credential is available."
+    },
+    {
+      "iteration": 8,
+      "verdict": "FAIL",
+      "summary": "All retained local gates pass, the Builder trailers parse correctly, and build 20261002.2202 is proven uploaded and processing, but current external-group selectability and persisted live beta metadata remain independently unverifiable."
     }
   ]
 }
