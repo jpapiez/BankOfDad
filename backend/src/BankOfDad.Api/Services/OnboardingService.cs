@@ -27,6 +27,8 @@ public sealed class OnboardingService(
     IConfiguration configuration)
 {
     public const int ProtocolVersion = 1;
+    public const string LegacyMultiFamilySetupState = "legacy-multi-family";
+    public const string SelfHostedUnavailableMessage = "Self-hosted onboarding is unavailable on a legacy multi-family server.";
 
     public Uri PublicOrigin => OriginPolicy.ParseAndValidate(configuration[$"{OnboardingOptions.SectionName}:PublicBaseUrl"] ?? "http://localhost:8080");
 
@@ -55,14 +57,25 @@ public sealed class OnboardingService(
         var familyName = installation.FamilyId is null
             ? null
             : await db.Families.Where(x => x.Id == installation.FamilyId).Select(x => x.Name).SingleAsync(ct).ConfigureAwait(false);
+        var setupState = installation.LegacyMultiFamily
+            ? LegacyMultiFamilySetupState
+            : installation.InitializedAt is null ? "uninitialized" : "ready";
         return new ServerDescriptor(
             ProtocolVersion,
             installation.Id,
             PublicOrigin.GetLeftPart(UriPartial.Authority),
-            installation.InitializedAt is null ? "uninitialized" : "ready",
+            setupState,
             familyName,
             new ServerCapabilities(true, true, true, AppleEnabled, PushEnabled),
             new ChildPinPolicy(ChildPinMinimumLength, 12));
+    }
+
+    public async Task EnsureSelfHostedOnboardingAvailableAsync(CancellationToken ct)
+    {
+        if (await db.ServerInstallations.AsNoTracking().Select(x => x.LegacyMultiFamily).SingleAsync(ct).ConfigureAwait(false))
+        {
+            throw new ApiException(409, SelfHostedUnavailableMessage);
+        }
     }
 
     public bool VerifySetupCode(string candidate)

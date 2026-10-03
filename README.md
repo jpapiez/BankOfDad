@@ -47,8 +47,18 @@ Database migrations are applied automatically when the API starts. To stop: `doc
 Compose waits for the API readiness check before completing `up -d`, so the
 health request can run immediately after startup.
 
-The Docker build uses NuGet's v2 endpoint by default because it is more
-reliable from the .NET SDK container than the v3 service-index endpoint. If
+The self-hosted schema migration is safe for upgrades from the earlier
+multi-family backend. If that database has more than one family when the
+self-hosted migrations are applied, it preserves every existing family and
+records `legacy-multi-family` mode: existing accounts and family APIs continue
+to work, but the one-family bootstrap and server-aware enrollment flows remain
+disabled until the installation is converted to the supported one-family
+layout. Fresh installations and databases that already contain one family use
+the normal self-hosted onboarding flow; later Development-only legacy test
+registrations do not change the recorded migration mode.
+
+The Docker build uses NuGet's standard v3 service-index endpoint by default.
+The restore command retries transient DNS/TLS transport failures. If
 your network requires a mirror, set `NUGET_SOURCE` in `.env` (or the
 environment) to a reachable package feed before building; the Docker build
 restores packages from it.

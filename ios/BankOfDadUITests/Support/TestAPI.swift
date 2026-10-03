@@ -129,6 +129,12 @@ final class TestAPI {
         ])
     }
 
+    func completeChildEnrollment(token: String, username: String, secret: String, kind: String) throws -> AuthTokens {
+        try decode(AuthTokens.self, "POST", "/api/v1/auth/complete-child-enrollment", body: [
+            "token": token, "username": username, "secret": secret, "credentialKind": kind, "deviceName": "UI test device"
+        ])
+    }
+
     /// Status code of a refresh-token rotation (401 once the token is revoked).
     func refreshStatus(_ refreshToken: String) -> Int {
         status("POST", "/api/v1/auth/refresh", body: ["refreshToken": refreshToken])

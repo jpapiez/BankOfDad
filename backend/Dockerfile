@@ -2,11 +2,10 @@
 # target (docker buildx --platform linux/amd64,linux/arm64), so no QEMU emulation is needed.
 FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 ARG TARGETARCH
-# The v2 endpoint avoids intermittent TLS EOFs seen by the SDK image when it
-# negotiates with api.nuget.org's v3 service index. Keep this overrideable for
-# air-gapped or enterprise feeds. Retries handle transient DNS/TLS resets in
-# container build networks without requiring a manual rebuild.
-ARG NUGET_SOURCE=https://www.nuget.org/api/v2
+# Keep the standard NuGet v3 service index as the default. Retries handle
+# transient DNS/TLS resets in container build networks without requiring a
+# manual rebuild.
+ARG NUGET_SOURCE=https://api.nuget.org/v3/index.json
 WORKDIR /src
 COPY . .
 RUN for attempt in 1 2 3 4 5; do \

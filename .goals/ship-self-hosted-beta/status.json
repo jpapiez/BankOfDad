@@ -1,10 +1,10 @@
 {
   "goal_id": "ship-self-hosted-beta",
-  "status": "blocked",
-  "iteration": 10,
+  "status": "ready_for_inspection",
+  "iteration": 11,
   "builder_model": "GPT:5.6-Luna",
   "inspector_model": "GPT:5.6-Sol",
-  "blocker": "A safely usable authenticated, read-only App Store Connect session or transient API-key environment is still required to verify current build selectability for external testing and persisted self-hosting/offline-demo beta review metadata; credentials must not be stored.",
+  "blocker": "App Store Connect upload/readiness still needs authenticated access; complete UI suite was started but exceeded the available execution window and was stopped after the focused suite passed.",
   "initial_sha": "44ecfd4324a18250f78cd6e4eb574c2ce88e5827",
   "created_at": "2026-10-02T20:24:28Z",
   "history": [
@@ -272,6 +272,47 @@
       "iteration": 10,
       "verdict": "FAIL",
       "summary": "The status-history anomaly is corrected without product changes or readiness overclaims, and all directed fixes remain intact, but live App Store Connect external-group selectability and persisted beta metadata remain independently unverified."
+    },
+    {
+      "iteration": 11,
+      "status": "ready_for_inspection",
+      "completed_at": "2026-10-03T08:45:00-07:00",
+      "quality_gates": {
+        "backend_restore": "passed",
+        "backend_release_build_warnings_as_errors": "passed: 0 warnings, 0 errors",
+        "backend_tests": "passed: 80 tests (49 API, 31 domain)",
+        "production_integration_tests": "passed: register and unconfigured Apple return 404; child login requests 1-10 return 200 and request 11 returns 429",
+        "legacy_migration_tests": "passed: multi-family database migrates and starts in legacy-multi-family mode without deleting families",
+        "docker_build": "passed with NUGET_SOURCE v2 override; default v3 attempted and was blocked by transient container TLS EOF after configured retries",
+        "docker_health": "passed: exact compose up and curl returned Healthy",
+        "docker_overridden_project_name": "passed: COMPOSE_PROJECT_NAME=custombeta build/up/api-ready/health",
+        "ios_project_generation": "passed",
+        "ios_unit_tests": "passed: 40 tests",
+        "ios_onboarding_ui_tests": "passed: focused run included OnboardingTests",
+        "ios_family_ui_tests": "passed: focused run included FamilyTests",
+        "ios_complete_ui_suite": "blocked: started with retry runner but exceeded execution window; stopped without a final verdict",
+        "ui_retry_shell_tests": "passed",
+        "signed_release_archive_export": "passed: 20261003.1537; export completed successfully",
+        "diff_check": "passed"
+      },
+      "release": {
+        "app_store_connect_build": "blocked: no authenticated upload session or API key available",
+        "external_testing_selection": "blocked: no authenticated App Store Connect session; no selection changed",
+        "saved_metadata": "blocked: no authenticated App Store Connect session; no metadata changed",
+        "beta_review_submission": "not submitted; explicit confirmation remains required"
+      },
+      "product_fixes": [
+        "Legacy multi-family migrations preserve existing families and disable only self-hosted bootstrap/enrollment",
+        "Private IPv6 HTTP policy parses literals and rejects prefix-like DNS names",
+        "Production auth availability and child-login rate boundary are integration-tested with explicit policies",
+        "Configured server replacement uses switchServer to revoke old credentials",
+        "UI retry is limited to the known XCUITest signal-kill/crash signature",
+        "UI tests validate and redeem exact parent and child payloads",
+        "api-ready derives its image from the Compose project name",
+        "NuGet defaults to v3 with transient restore retries",
+        "Account deletion resets installation state only for the deleted family",
+        "Enrollment inspection has a production rate limit"
+      ]
     }
   ]
 }

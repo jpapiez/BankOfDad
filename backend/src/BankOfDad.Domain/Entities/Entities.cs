@@ -19,6 +19,7 @@ public class ServerInstallation
     public Family? Family { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset? InitializedAt { get; set; }
+    public bool LegacyMultiFamily { get; set; }
 }
 
 public class EnrollmentToken

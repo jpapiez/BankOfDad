@@ -66,9 +66,14 @@ public sealed class AccountDeletionService(BankOfDadDbContext db, IAppleAuthoriz
 
         if (remainingParentId is null)
         {
-            var installation = await db.ServerInstallations.SingleAsync(ct).ConfigureAwait(false);
-            installation.FamilyId = null;
-            installation.InitializedAt = null;
+            var installation = await db.ServerInstallations
+                .SingleOrDefaultAsync(x => x.FamilyId == familyId, ct)
+                .ConfigureAwait(false);
+            if (installation is not null)
+            {
+                installation.FamilyId = null;
+                installation.InitializedAt = null;
+            }
             await db.EnrollmentTokens.Where(x => x.FamilyId == familyId).ExecuteDeleteAsync(ct).ConfigureAwait(false);
             var family = await db.Families.SingleAsync(x => x.Id == familyId, ct).ConfigureAwait(false);
             db.Families.Remove(family);

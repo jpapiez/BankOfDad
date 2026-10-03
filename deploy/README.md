@@ -59,9 +59,20 @@ The helper:
 
 Open the printed URL, enter the setup code, and scan the resulting QR from **Bank of Dad > Connect your family server**. The app confirms the hostname and capabilities before it creates the first parent and the server's only family. After that transaction completes, the setup code is permanently inactive unless the last parent deletes the family.
 
+Upgrading a database created by the earlier multi-family backend is
+non-destructive. If more than one family exists when the self-hosted
+migrations are applied, the migration keeps all existing families and records
+`legacy-multi-family` mode; existing accounts can continue to sign in and use
+their family data, but the self-hosted bootstrap and server-aware enrollment
+QR flows are disabled. The migration does not merge families or choose one
+family implicitly. Use a fresh database or perform an intentional one-family
+conversion before enabling the self-hosted onboarding flow. The recorded mode
+does not change merely because Development-only legacy registration later
+creates additional test families.
+
 From any device on the tailnet: `curl https://bankofdad.<tailnet>.ts.net/health` → `Healthy`. The first HTTPS request provisions the certificate and can take a few seconds.
 
-The compose file refuses to start without `POSTGRES_PASSWORD` and `JWT_SIGNING_KEY`. The API runs in **Production**: it requires a 32+ character signing key, hides exception details and OpenAPI, and can't enable the Development-only test hooks. Database migrations are applied automatically at startup.
+The compose file refuses to start without `POSTGRES_PASSWORD` and `JWT_SIGNING_KEY`. The API runs in **Production**: it requires a 32+ character signing key, hides exception details and OpenAPI, and can't enable the Development-only test hooks. Database migrations are applied automatically at startup. The `api-ready` barrier derives its image tag from `COMPOSE_PROJECT_NAME`, so `docker compose -p another-name up -d` remains valid.
 
 ## 3. Connect family phones
 

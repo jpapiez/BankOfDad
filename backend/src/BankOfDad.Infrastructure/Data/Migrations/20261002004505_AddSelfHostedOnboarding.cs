@@ -120,9 +120,6 @@ namespace BankOfDad.Infrastructure.Data.Migrations
                     existing_created_at timestamp with time zone;
                 BEGIN
                     SELECT COUNT(*) INTO family_count FROM "Families";
-                    IF family_count > 1 THEN
-                        RAISE EXCEPTION 'Self-hosted onboarding requires one family per server, but this database contains % families.', family_count;
-                    END IF;
 
                     IF family_count = 1 THEN
                         SELECT "Id", "CreatedAt" INTO existing_family_id, existing_created_at
@@ -132,6 +129,10 @@ namespace BankOfDad.Infrastructure.Data.Migrations
                         INSERT INTO "ServerInstallations" ("Id", "FamilyId", "CreatedAt", "InitializedAt")
                         VALUES (gen_random_uuid(), existing_family_id, existing_created_at, NOW());
                     ELSE
+                        -- Existing pre-self-hosted databases may contain multiple
+                        -- families. Keep those families intact and let startup
+                        -- expose the legacy multi-family mode instead of making a
+                        -- universal schema migration fail.
                         INSERT INTO "ServerInstallations" ("Id", "FamilyId", "CreatedAt", "InitializedAt")
                         VALUES (gen_random_uuid(), NULL, NOW(), NULL);
                     END IF;

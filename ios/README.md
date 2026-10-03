@@ -19,7 +19,7 @@ Production users select their family server at runtime. A fresh deployment print
 
 The app always fetches `/.well-known/bankofdad`, verifies that the descriptor's canonical origin and installation ID match the QR, and shows a confirmation before saving the profile. Tokens and server identity are stored together in the Keychain so credentials cannot be sent to another server.
 
-For local development, `API_BASE_URL` remains a Debug/UI-test seed profile. The app verifies the descriptor before importing it. Public HTTP is rejected. HTTP is accepted only for loopback, `.local`, link-local, and private IP addresses and shows a prominent warning; HTTPS uses normal iOS certificate validation.
+For local development, `API_BASE_URL` remains a Debug/UI-test seed profile. The app verifies the descriptor before importing it. Public HTTP is rejected. HTTP is accepted only for `localhost`, `.local` names, IPv4 private/link-local ranges, or parsed IPv6 loopback, unique-local (`fc00::/7`), and link-local (`fe80::/10`) literals; DNS names that merely begin with an IPv6 prefix still require HTTPS. Private HTTP shows a prominent warning; HTTPS uses normal iOS certificate validation.
 
 ## Install on family devices (TestFlight)
 
@@ -121,7 +121,7 @@ The script does the following:
 | Variable | Default | Purpose |
 |---|---|---|
 | `SIMULATOR_ID` | first available iPhone 17 Pro Max | Simulator UDID to test on |
-| `DESTINATION` | `id=$SIMULATOR_ID` | Full `xcodebuild -destination` override |
+| `DESTINATION` | `id=$SIMULATOR_ID` | Full `xcodebuild -destination` override. If it includes `id=<UDID>`, retries reset that simulator; name/OS-only destinations report that reset is unavailable. |
 | `API_URL` | `http://localhost:8080` | Backend URL for both the app (`API_BASE_URL`) and the test runner's seeding client. Plain HTTP is only allowed to `localhost` and `127.0.0.1`. |
 | `SKIP_BACKEND=1` | off | Don't touch docker compose (the stack is already running with hooks on) |
 | `NO_BUILD=1` | off | `docker compose up` without `--build` |
@@ -130,9 +130,16 @@ The script does the following:
 
 The runner retries a complete invocation because some iOS Simulator runtimes
 occasionally terminate XCUITest with `signal kill` during deep-link or keyboard
-transitions. The final attempt's status is returned, so persistent test
-failures still fail the gate. Set `UI_TEST_ATTEMPTS=1` when diagnosing a
-single-run failure.
+transitions. When the destination includes a simulator UDID, the runner
+shuts down and reboots that exact simulator before retrying. A destination
+that identifies only a name or OS cannot be reset safely, so the runner
+reports reset unavailable and retries without pretending that a reset occurred.
+The final attempt's status is returned, so persistent test failures still fail
+the gate. Set `UI_TEST_ATTEMPTS=1` when diagnosing a single-run failure. The
+destination parser has a shell-level check in
+`scripts/run-ui-tests-lib.tests.sh`.
+Only the known XCUITest runner signal-kill/crash signature is retried;
+assertion failures and build failures stop immediately.
 
 CI skips this target (`-skip-testing:BankOfDadUITests`) because it needs the backend.
 

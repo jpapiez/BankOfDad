@@ -184,6 +184,7 @@ struct PairingCodeSheet: View {
                         .scaledToFit()
                         .frame(width: 220, height: 220)
                         .accessibilityLabel("Pairing QR code")
+                        .accessibilityValue(response.qrPayload)
                         .accessibilityIdentifier("pairingSheet.qr")
                 }
                 Text("Expires in \(remainingSeconds) seconds")

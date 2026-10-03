@@ -1,4 +1,5 @@
 import Foundation
+import Darwin
 
 struct ServerProfile: Codable, Equatable, Hashable, Sendable {
     let id: UUID
@@ -120,9 +121,7 @@ enum ServerOriginPolicy {
     static func isPrivateHost(_ host: String) -> Bool {
         let value = host.lowercased().trimmingCharacters(in: CharacterSet(charactersIn: "[]"))
         if value == "localhost" || value.hasSuffix(".local") { return true }
-        if value == "::1" || value.hasPrefix("fc") || value.hasPrefix("fd") || value.hasPrefix("fe8") || value.hasPrefix("fe9") || value.hasPrefix("fea") || value.hasPrefix("feb") {
-            return true
-        }
+        if isPrivateIPv6Literal(value) { return true }
         let parts = value.split(separator: ".").compactMap { Int($0) }
         guard parts.count == 4, parts.allSatisfy({ (0...255).contains($0) }) else { return false }
         return parts[0] == 10 ||
@@ -130,6 +129,20 @@ enum ServerOriginPolicy {
             (parts[0] == 169 && parts[1] == 254) ||
             (parts[0] == 172 && (16...31).contains(parts[1])) ||
             (parts[0] == 192 && parts[1] == 168)
+    }
+
+    private static func isPrivateIPv6Literal(_ value: String) -> Bool {
+        var address = in6_addr()
+        let parsed = value.withCString { inet_pton(AF_INET6, $0, &address) }
+        guard parsed == 1 else { return false }
+
+        let bytes = withUnsafeBytes(of: address) { Array($0) }
+        guard bytes.count == 16 else { return false }
+
+        let isLoopback = bytes.dropLast().allSatisfy { $0 == 0 } && bytes[15] == 1
+        let isUniqueLocal = (bytes[0] & 0xfe) == 0xfc
+        let isLinkLocal = bytes[0] == 0xfe && (bytes[1] & 0xc0) == 0x80
+        return isLoopback || isUniqueLocal || isLinkLocal
     }
 }
 

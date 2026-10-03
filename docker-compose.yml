@@ -24,9 +24,9 @@ services:
       context: ./backend
       dockerfile: Dockerfile
       args:
-        # Use the NuGet v2 endpoint by default; NUGET_SOURCE can point at a
-        # reachable internal mirror or another package feed.
-        NUGET_SOURCE: ${NUGET_SOURCE:-https://www.nuget.org/api/v2}
+        # Use the NuGet v3 service index by default; NUGET_SOURCE can point at
+        # a reachable internal mirror or another package feed.
+        NUGET_SOURCE: ${NUGET_SOURCE:-https://api.nuget.org/v3/index.json}
     restart: unless-stopped
     depends_on:
       db:
@@ -65,7 +65,7 @@ services:
   # `docker compose up -d` waits for this dependent service, making the
   # documented health curl deterministic immediately after startup.
   api-ready:
-    image: bankofdad-api
+    image: ${COMPOSE_PROJECT_NAME:-bankofdad}-api
     depends_on:
       api:
         condition: service_healthy

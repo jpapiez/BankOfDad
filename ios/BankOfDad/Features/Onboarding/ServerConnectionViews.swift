@@ -138,16 +138,22 @@ struct ConnectServerView: View {
     }
 
     private func confirm(_ review: ConnectionReview) {
-        do {
-            let profile = try ServerProfile(descriptor: review.descriptor)
-            try environment.configureServer(profile)
-            if let link = review.link, let preview = review.preview {
-                router.pendingEnrollment = PendingEnrollment(kind: link.kind, token: link.token, preview: preview)
+        Task {
+            do {
+                let profile = try ServerProfile(descriptor: review.descriptor)
+                if environment.serverProfile == nil {
+                    try environment.configureServer(profile)
+                } else {
+                    try await environment.switchServer(to: profile)
+                }
+                if let link = review.link, let preview = review.preview {
+                    router.pendingEnrollment = PendingEnrollment(kind: link.kind, token: link.token, preview: preview)
+                }
+                self.review = nil
+                dismiss()
+            } catch {
+                errorMessage = error.localizedDescription
             }
-            self.review = nil
-            dismiss()
-        } catch {
-            errorMessage = error.localizedDescription
         }
     }
 }

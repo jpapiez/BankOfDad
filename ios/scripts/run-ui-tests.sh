@@ -19,6 +19,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 IOS_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 REPO_DIR="$(cd "$IOS_DIR/.." && pwd)"
+source "$SCRIPT_DIR/run-ui-tests-lib.sh"
 API_URL="${API_URL:-http://localhost:8080}"
 DERIVED_DATA="${DERIVED_DATA:-$IOS_DIR/build}"
 
@@ -49,7 +50,14 @@ log "Generating Xcode project"
 (cd "$IOS_DIR" && xcodegen generate --quiet)
 
 selected_simulator_id=""
-if [[ -z "${DESTINATION:-}" ]]; then
+if [[ -n "${DESTINATION:-}" ]]; then
+  selected_simulator_id="$(extract_simulator_id "$DESTINATION")"
+  if [[ -n "$selected_simulator_id" ]]; then
+    log "Using simulator $selected_simulator_id from DESTINATION"
+  else
+    log "Simulator reset unavailable: DESTINATION has no id=<UDID>; retries will reuse the destination without resetting a known simulator"
+  fi
+else
   if [[ -z "${SIMULATOR_ID:-}" ]]; then
     SIMULATOR_ID="$(xcrun simctl list devices available -j | python3 -c '
 import json, sys
@@ -101,24 +109,34 @@ if [[ -n "${XCODEBUILD_EXTRA_ARGS:-}" ]]; then
 fi
 
 # iOS Simulator occasionally kills an XCUITest runner during a deep-link or
-# keyboard transition (especially on a freshly booted runtime). Retry the
-# complete invocation once so the documented gate is resilient to that
-# transient runner failure. A persistent failure still returns non-zero.
+# keyboard transition (especially on a freshly booted runtime). Retry only
+# that known runner crash signature; assertions and build failures fail fast.
 test_status=1
 for attempt in $(seq 1 "$UI_TEST_ATTEMPTS"); do
   log "Running UI tests on $DESTINATION (attempt $attempt/$UI_TEST_ATTEMPTS)"
-  if TEST_RUNNER_BANKOFDAD_API_URL="$API_URL" xcodebuild "${xcodebuild_args[@]}"; then
+  set +e
+  output="$(TEST_RUNNER_BANKOFDAD_API_URL="$API_URL" xcodebuild "${xcodebuild_args[@]}" 2>&1)"
+  command_status=$?
+  set -e
+  printf '%s\n' "$output"
+  if (( command_status == 0 )); then
     test_status=0
     break
   fi
 
-  if (( attempt < UI_TEST_ATTEMPTS )); then
-    log "UI test attempt $attempt failed; resetting the simulator before retrying"
+  if (( attempt < UI_TEST_ATTEMPTS )) && is_retryable_ui_failure "$output"; then
     if [[ -n "$selected_simulator_id" ]]; then
+      log "UI test attempt $attempt failed; resetting simulator $selected_simulator_id before retrying"
       xcrun simctl shutdown "$selected_simulator_id" >/dev/null 2>&1 || true
       xcrun simctl boot "$selected_simulator_id" >/dev/null 2>&1 || true
       xcrun simctl bootstatus "$selected_simulator_id" -b >/dev/null
+    else
+      log "UI test attempt $attempt failed; simulator reset unavailable because DESTINATION has no id=<UDID>; retrying without reset"
     fi
+  else
+    log "UI test attempt $attempt failed with a non-retryable result; stopping"
+    test_status="$command_status"
+    break
   fi
 done
 

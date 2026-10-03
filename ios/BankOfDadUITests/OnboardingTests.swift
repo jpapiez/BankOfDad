@@ -64,6 +64,7 @@ final class OnboardingTests: BankUITestCase {
     func testSignInWithAppleIsHiddenWhenServerDoesNotAdvertiseIt() {
         launch()
         element("welcome.parent").waitToAppear(timeout: 15).tap()
+        XCTAssertTrue(element("signIn.email").waitForExistence(timeout: 10))
         XCTAssertFalse(element("signIn.apple").exists)
     }
 

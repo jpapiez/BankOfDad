@@ -116,6 +116,13 @@ final class FamilyTests: BankUITestCase {
         XCTAssertTrue(app.navigationBars["Set Up Child Login"].waitForExistence(timeout: 10))
 
         element("pairingSheet.code").waitToAppear().waitFor(label: "Scan to create a username and password or PIN.")
+        let payload = try XCTUnwrap(element("pairingSheet.qr").waitToAppear().value as? String)
+        let components = try XCTUnwrap(URLComponents(string: payload))
+        let token = try XCTUnwrap(components.queryItems?.first(where: { $0.name == "token" })?.value)
+        XCTAssertEqual(components.queryItems?.first(where: { $0.name == "kind" })?.value, "child")
+        let username = "yuri-\(UUID().uuidString.prefix(8).lowercased())"
+        let childAuth = try api.completeChildEnrollment(token: token, username: username, secret: "123456", kind: "pin")
+        XCTAssertEqual(childAuth.user.role, "child")
         XCTAssertTrue(element("pairingSheet.qr").exists)
         element("pairingSheet.expires").waitFor(label: "Expires in")
         XCTAssertTrue(element("pairingSheet.share").exists)

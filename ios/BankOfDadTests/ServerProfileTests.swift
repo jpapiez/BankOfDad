@@ -30,6 +30,40 @@ final class ServerProfileTests: XCTestCase {
         XCTAssertThrowsError(try ServerOriginPolicy.validate("ftp://192.168.1.2"))
     }
 
+    func testHTTPParsesIPv6LiteralsInsteadOfMatchingHostnamePrefixes() throws {
+        let allowed = [
+            "http://[fc00::1]",
+            "http://[fd12:3456:789a::1]",
+            "http://[fe80::1]",
+            "http://[febf::1]"
+        ]
+        for value in allowed {
+            XCTAssertNoThrow(try ServerOriginPolicy.validate(value), value)
+        }
+
+        let publicIPv6 = [
+            "http://[2001:db8::1]",
+            "http://[fe00::1]",
+            "http://[fec0::1]"
+        ]
+        for value in publicIPv6 {
+            XCTAssertThrowsError(try ServerOriginPolicy.validate(value), value)
+        }
+    }
+
+    func testDNSNamesThatResemblePrivateIPv6PrefixesStillRequireHTTPS() throws {
+        for hostname in ["fc.example.com", "fd.example.com", "fe80.example.com", "feb.example.com"] {
+            XCTAssertThrowsError(
+                try ServerOriginPolicy.validate("http://\(hostname)"),
+                hostname
+            )
+            XCTAssertNoThrow(
+                try ServerOriginPolicy.validate("https://\(hostname)"),
+                hostname
+            )
+        }
+    }
+
     func testConnectionLinkParsesVersionedServerBoundEnrollment() throws {
         let serverID = UUID(uuidString: "11111111-1111-4111-8111-111111111111")!
         var components = URLComponents(string: "bankofdad://connect")!
