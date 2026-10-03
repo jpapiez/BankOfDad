@@ -25,8 +25,12 @@ using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.WebUtilities;
 using QRCoder;
 
+const string ReadinessFilePath = "/tmp/bankofdad-ready";
+try { File.Delete(ReadinessFilePath); } catch (IOException) { }
+
 var builder = WebApplication.CreateBuilder(args);
 var env = builder.Environment;
+var deferMigrationsUntilAfterStart = builder.Configuration.GetValue("Database:StartBeforeMigrations", false);
 var signingKey = builder.Configuration["Jwt:SigningKey"];
 if (!env.IsDevelopment() && !env.IsEnvironment("Testing") && (string.IsNullOrWhiteSpace(signingKey) || signingKey.Length < 32))
 {
@@ -67,6 +71,7 @@ builder.Services.AddScoped<OnboardingService>();
 builder.Services.AddScoped<AccountDeletionService>();
 builder.Services.AddScoped<NotificationService>();
 builder.Services.AddScoped<LoanSweeper>();
+builder.Services.AddSingleton<DatabaseReadySignal>();
 if (string.IsNullOrWhiteSpace(builder.Configuration["Apns:KeyId"]))
 {
     builder.Services.AddScoped<IPushSender, LoggingPushSender>();
@@ -150,6 +155,20 @@ app.UseExceptionHandler(errorApp => errorApp.Run(async context =>
     var includeException = context.RequestServices.GetRequiredService<IHostEnvironment>().IsDevelopment() || context.RequestServices.GetRequiredService<IHostEnvironment>().IsEnvironment("Testing");
     await Results.Problem(title: api?.Title ?? "Unexpected error", detail: api?.Detail ?? (status == 500 && !includeException ? null : ex?.Message), statusCode: status).ExecuteAsync(context);
 }));
+var databaseReady = app.Services.GetRequiredService<DatabaseReadySignal>();
+if (deferMigrationsUntilAfterStart)
+{
+    app.Use(async (context, next) =>
+    {
+        if (!context.Request.Path.StartsWithSegments("/health") && !databaseReady.IsReady)
+        {
+            context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
+            await context.Response.WriteAsync("Database migration in progress.", context.RequestAborted);
+            return;
+        }
+        await next();
+    });
+}
 app.UseStatusCodePages(async statusCodeContext =>
 {
     var context = statusCodeContext.HttpContext;
@@ -163,8 +182,6 @@ if (app.Environment.IsDevelopment()) app.MapOpenApi();
 app.UseAuthentication();
 app.UseAuthorization();
 if (!env.IsEnvironment("Testing")) app.UseRateLimiter();
-
-await ApplyMigrationsAsync(app.Services, app.Logger);
 
 app.MapGet("/health", async (BankOfDadDbContext db, CancellationToken ct) => await db.Database.CanConnectAsync(ct) ? Results.Text("Healthy") : Results.Problem("Database unavailable", statusCode: 503));
 app.MapGet("/.well-known/bankofdad", async (OnboardingService onboarding, CancellationToken ct) => Results.Ok(await onboarding.DescriptorAsync(ct)));
@@ -688,7 +705,31 @@ if (TestHooks.IsEnabled(app.Environment, app.Configuration))
     api.MapTestHooks();
 }
 
-await app.RunAsync();
+try
+{
+    if (!deferMigrationsUntilAfterStart)
+    {
+        await ApplyMigrationsAsync(app.Services, app.Logger);
+        databaseReady.SetReady();
+    }
+    await app.StartAsync();
+    if (deferMigrationsUntilAfterStart)
+    {
+        await ApplyMigrationsAsync(app.Services, app.Logger);
+        databaseReady.SetReady();
+    }
+    await File.WriteAllTextAsync(ReadinessFilePath, "ready");
+    await app.WaitForShutdownAsync();
+}
+catch
+{
+    await app.StopAsync();
+    throw;
+}
+finally
+{
+    try { File.Delete(ReadinessFilePath); } catch (IOException) { }
+}
 
 static string SetupPage(string title, string message, string? content) =>
     $$"""

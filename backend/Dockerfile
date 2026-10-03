@@ -2,10 +2,19 @@
 # target (docker buildx --platform linux/amd64,linux/arm64), so no QEMU emulation is needed.
 FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 ARG TARGETARCH
-ARG NUGET_SOURCE=https://api.nuget.org/v3/index.json
+# The v2 endpoint avoids intermittent TLS EOFs seen by the SDK image when it
+# negotiates with api.nuget.org's v3 service index. Keep this overrideable for
+# air-gapped or enterprise feeds. Retries handle transient DNS/TLS resets in
+# container build networks without requiring a manual rebuild.
+ARG NUGET_SOURCE=https://www.nuget.org/api/v2
 WORKDIR /src
 COPY . .
-RUN dotnet restore src/BankOfDad.Api/BankOfDad.Api.csproj -a "$TARGETARCH" --source "$NUGET_SOURCE"
+RUN for attempt in 1 2 3 4 5; do \
+      dotnet restore src/BankOfDad.Api/BankOfDad.Api.csproj -a "$TARGETARCH" --source "$NUGET_SOURCE" --disable-parallel && exit 0; \
+      echo "NuGet restore attempt $attempt failed; retrying..." >&2; \
+      sleep $((attempt * 5)); \
+    done; \
+    exit 1
 RUN dotnet publish src/BankOfDad.Api/BankOfDad.Api.csproj -c Release -a "$TARGETARCH" --self-contained false -o /app/publish --no-restore
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final

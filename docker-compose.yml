@@ -24,7 +24,9 @@ services:
       context: ./backend
       dockerfile: Dockerfile
       args:
-        NUGET_SOURCE: ${NUGET_SOURCE:-https://api.nuget.org/v3/index.json}
+        # Use the NuGet v2 endpoint by default; NUGET_SOURCE can point at a
+        # reachable internal mirror or another package feed.
+        NUGET_SOURCE: ${NUGET_SOURCE:-https://www.nuget.org/api/v2}
     restart: unless-stopped
     depends_on:
       db:
@@ -32,6 +34,9 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Development}
       ASPNETCORE_HTTP_PORTS: "8080"
+      # Let Kestrel bind before migrations so Compose can expose a deterministic
+      # liveness endpoint while the readiness gate waits for the schema.
+      Database__StartBeforeMigrations: "true"
       ConnectionStrings__Default: "Host=db;Port=5432;Database=${POSTGRES_DB:-bankofdad};Username=${POSTGRES_USER:-bankofdad};Password=${POSTGRES_PASSWORD:-bankofdad-dev}"
       Jwt__SigningKey: ${JWT_SIGNING_KEY:-dev-only-signing-key-change-me-0123456789abcdef}
       Apple__ClientId: ${APPLE_CLIENT_ID:-com.example.bankofdad}
@@ -50,6 +55,22 @@ services:
       - "8080:8080"
     volumes:
       - ./secrets:/run/secrets/apple:ro
+    healthcheck:
+      # The API writes this only after Kestrel is listening and migrations finish.
+      test: ["CMD-SHELL", "test -f /tmp/bankofdad-ready"]
+      interval: 1s
+      timeout: 1s
+      retries: 60
+
+  # `docker compose up -d` waits for this dependent service, making the
+  # documented health curl deterministic immediately after startup.
+  api-ready:
+    image: bankofdad-api
+    depends_on:
+      api:
+        condition: service_healthy
+    entrypoint: ["sh", "-c"]
+    command: ["while :; do sleep 3600; done"]
 
 volumes:
   pgdata:

@@ -187,10 +187,22 @@ public sealed class LoanSweeper(BankOfDadDbContext db, LoanStateService state, N
     }
 }
 
-public sealed class DailySweepService(IServiceScopeFactory scopeFactory, ILogger<DailySweepService> logger) : BackgroundService
+public sealed class DatabaseReadySignal
+{
+    private readonly TaskCompletionSource<bool> completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    public bool IsReady => completion.Task.IsCompletedSuccessfully;
+
+    public Task WaitAsync(CancellationToken cancellationToken) => completion.Task.WaitAsync(cancellationToken);
+
+    public void SetReady() => completion.TrySetResult(true);
+}
+
+public sealed class DailySweepService(IServiceScopeFactory scopeFactory, DatabaseReadySignal databaseReady, ILogger<DailySweepService> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        await databaseReady.WaitAsync(stoppingToken).ConfigureAwait(false);
         while (!stoppingToken.IsCancellationRequested)
         {
             try

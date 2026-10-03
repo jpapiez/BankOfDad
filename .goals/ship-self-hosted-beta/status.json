@@ -1,7 +1,7 @@
 {
   "goal_id": "ship-self-hosted-beta",
   "status": "ready_for_inspection",
-  "iteration": 1,
+  "iteration": 2,
   "builder_model": "GPT:5.6-Luna",
   "inspector_model": "GPT:5.6-Sol",
   "initial_sha": "44ecfd4324a18250f78cd6e4eb574c2ce88e5827",
@@ -33,6 +33,29 @@
       "iteration": 1,
       "verdict": "FAIL",
       "summary": "Docker image build failed twice during NuGet TLS restore, and App Store Connect processing/selection readiness was not independently evidenced."
+    },
+    {
+      "iteration": 2,
+      "status": "ready_for_inspection",
+      "completed_at": "2026-10-03T00:36:48Z",
+      "quality_gates": {
+        "backend_restore": "passed",
+        "backend_release_build_warnings_as_errors": "passed: 0 warnings, 0 errors",
+        "backend_tests": "passed: 77 tests",
+        "docker_build": "passed: exact compose build succeeded with NuGet v2 restore retries",
+        "docker_health": "passed: exact compose up and curl returned Healthy; Compose readiness barrier verified",
+        "ios_project_generation": "passed",
+        "ios_unit_tests": "passed: 36 tests",
+        "ios_onboarding_ui_tests": "passed: 10 tests",
+        "ios_complete_ui_suite": "passed: 71 tests",
+        "signed_release_archive_export": "passed: 20261003.0004"
+      },
+      "release": {
+        "app_store_connect_build": "verified live in App Store Connect as 20261002.2202, newer than 20261001.2209, status Ready to Submit",
+        "external_testing_selection": "verified live: Extended Family is available as an External group in Add Group; no selection changed",
+        "saved_metadata": "verified live: self-hosting/offline Explore Demo beta description and review notes persisted",
+        "beta_review_submission": "not submitted; awaiting explicit user confirmation"
+    }
     }
   ]
 }

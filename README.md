@@ -44,8 +44,14 @@ curl http://localhost:8080/health   # -> Healthy
 ```
 
 Database migrations are applied automatically when the API starts. To stop: `docker compose down` (add `-v` to wipe the database volume).
+Compose waits for the API readiness check before completing `up -d`, so the
+health request can run immediately after startup.
 
-If `api.nuget.org` is blocked on your network, set `NUGET_SOURCE` in `.env` (or the environment) to a reachable NuGet v3 feed before building; the Docker build restores packages from it.
+The Docker build uses NuGet's v2 endpoint by default because it is more
+reliable from the .NET SDK container than the v3 service-index endpoint. If
+your network requires a mirror, set `NUGET_SOURCE` in `.env` (or the
+environment) to a reachable package feed before building; the Docker build
+restores packages from it.
 
 ### Tests
 
