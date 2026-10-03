@@ -1,7 +1,7 @@
 {
   "goal_id": "ship-self-hosted-beta",
   "status": "ready_for_inspection",
-  "iteration": 2,
+  "iteration": 3,
   "builder_model": "GPT:5.6-Luna",
   "inspector_model": "GPT:5.6-Sol",
   "initial_sha": "44ecfd4324a18250f78cd6e4eb574c2ce88e5827",
@@ -61,6 +61,29 @@
       "iteration": 2,
       "verdict": "FAIL",
       "summary": "Docker and backend gates passed, but the focused onboarding UI command failed twice and live App Store Connect build, metadata, and external-testing readiness could not be independently verified."
+    },
+    {
+      "iteration": 3,
+      "status": "ready_for_inspection",
+      "completed_at": "2026-10-03T02:51:23Z",
+      "quality_gates": {
+        "backend_restore": "passed",
+        "backend_release_build_warnings_as_errors": "passed: 0 warnings, 0 errors",
+        "backend_tests": "passed: 77 tests",
+        "docker_build": "passed",
+        "docker_health": "passed: curl returned Healthy",
+        "ios_project_generation": "passed",
+        "ios_unit_tests": "passed: 36 tests",
+        "ios_onboarding_ui_tests": "passed: 10 tests; runner now retries transient simulator signal-kill failures",
+        "ios_complete_ui_suite": "passed: 71 tests",
+        "signed_release_archive_export": "passed: 20261003.0250; Apple Distribution signed, beta-reports-active=true, get-task-allow=false"
+      },
+      "release": {
+        "app_store_connect_build": "blocked: no independently usable authenticated App Store Connect session or API credential is configured",
+        "external_testing_selection": "blocked: live App Store Connect state unavailable; no selection changed",
+        "saved_metadata": "blocked: live App Store Connect state unavailable; repository source metadata remains unchanged",
+        "beta_review_submission": "not submitted; no build/group selection or metadata was changed"
+      }
     }
   ]
 }

@@ -126,6 +126,13 @@ The script does the following:
 | `SKIP_BACKEND=1` | off | Don't touch docker compose (the stack is already running with hooks on) |
 | `NO_BUILD=1` | off | `docker compose up` without `--build` |
 | `XCODEBUILD_EXTRA_ARGS` | — | Extra arguments passed to `xcodebuild` |
+| `UI_TEST_ATTEMPTS` | `2` | Complete `xcodebuild` attempts; a failed attempt resets the selected simulator before retrying |
+
+The runner retries a complete invocation because some iOS Simulator runtimes
+occasionally terminate XCUITest with `signal kill` during deep-link or keyboard
+transitions. The final attempt's status is returned, so persistent test
+failures still fail the gate. Set `UI_TEST_ATTEMPTS=1` when diagnosing a
+single-run failure.
 
 CI skips this target (`-skip-testing:BankOfDadUITests`) because it needs the backend.
 

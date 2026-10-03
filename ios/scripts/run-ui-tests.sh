@@ -13,6 +13,7 @@
 #   SKIP_BACKEND=1   don't (re)start docker compose; just wait for the API
 #   NO_BUILD=1       start compose without --build
 #   DERIVED_DATA     xcodebuild derived data path (default ios/build)
+#   UI_TEST_ATTEMPTS number of complete xcodebuild attempts (default: 2)
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -47,6 +48,7 @@ fi
 log "Generating Xcode project"
 (cd "$IOS_DIR" && xcodegen generate --quiet)
 
+selected_simulator_id=""
 if [[ -z "${DESTINATION:-}" ]]; then
   if [[ -z "${SIMULATOR_ID:-}" ]]; then
     SIMULATOR_ID="$(xcrun simctl list devices available -j | python3 -c '
@@ -57,6 +59,7 @@ print(preferred[0]["udid"] if preferred else "")
 ')"
   fi
   [[ -n "$SIMULATOR_ID" ]] || { echo "No iPhone simulator found; set SIMULATOR_ID or DESTINATION." >&2; exit 1; }
+  selected_simulator_id="$SIMULATOR_ID"
   log "Booting simulator $SIMULATOR_ID"
   xcrun simctl boot "$SIMULATOR_ID" 2>/dev/null || true
   xcrun simctl bootstatus "$SIMULATOR_ID" -b >/dev/null
@@ -74,12 +77,49 @@ log "Running UI tests on $DESTINATION"
 # same backend. (ATS only allows plain HTTP to localhost/127.0.0.1.) Ad-hoc signing keeps the app's keychain
 # entitlements (CODE_SIGNING_ALLOWED=NO breaks the keychain).
 cd "$IOS_DIR"
-TEST_RUNNER_BANKOFDAD_API_URL="$API_URL" xcodebuild test \
-  -project BankOfDad.xcodeproj \
-  -scheme BankOfDad \
-  -destination "$DESTINATION" \
-  -derivedDataPath "$DERIVED_DATA" \
-  "${only_testing[@]}" \
-  API_BASE_URL="$API_URL" \
-  CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= \
-  ${XCODEBUILD_EXTRA_ARGS:-}
+UI_TEST_ATTEMPTS="${UI_TEST_ATTEMPTS:-2}"
+[[ "$UI_TEST_ATTEMPTS" =~ ^[1-9][0-9]*$ ]] || {
+  echo "UI_TEST_ATTEMPTS must be a positive integer." >&2
+  exit 1
+}
+
+xcodebuild_args=(
+  test
+  -project BankOfDad.xcodeproj
+  -scheme BankOfDad
+  -destination "$DESTINATION"
+  -derivedDataPath "$DERIVED_DATA"
+  "${only_testing[@]}"
+  API_BASE_URL="$API_URL"
+  CODE_SIGN_IDENTITY=-
+  CODE_SIGN_STYLE=Manual
+  DEVELOPMENT_TEAM=
+)
+if [[ -n "${XCODEBUILD_EXTRA_ARGS:-}" ]]; then
+  read -r -a extra_args <<< "$XCODEBUILD_EXTRA_ARGS"
+  xcodebuild_args+=("${extra_args[@]}")
+fi
+
+# iOS Simulator occasionally kills an XCUITest runner during a deep-link or
+# keyboard transition (especially on a freshly booted runtime). Retry the
+# complete invocation once so the documented gate is resilient to that
+# transient runner failure. A persistent failure still returns non-zero.
+test_status=1
+for attempt in $(seq 1 "$UI_TEST_ATTEMPTS"); do
+  log "Running UI tests on $DESTINATION (attempt $attempt/$UI_TEST_ATTEMPTS)"
+  if TEST_RUNNER_BANKOFDAD_API_URL="$API_URL" xcodebuild "${xcodebuild_args[@]}"; then
+    test_status=0
+    break
+  fi
+
+  if (( attempt < UI_TEST_ATTEMPTS )); then
+    log "UI test attempt $attempt failed; resetting the simulator before retrying"
+    if [[ -n "$selected_simulator_id" ]]; then
+      xcrun simctl shutdown "$selected_simulator_id" >/dev/null 2>&1 || true
+      xcrun simctl boot "$selected_simulator_id" >/dev/null 2>&1 || true
+      xcrun simctl bootstatus "$selected_simulator_id" -b >/dev/null
+    fi
+  fi
+done
+
+exit "$test_status"
