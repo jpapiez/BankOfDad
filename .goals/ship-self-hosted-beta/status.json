@@ -1,10 +1,10 @@
 {
   "goal_id": "ship-self-hosted-beta",
   "status": "ready_for_inspection",
-  "iteration": 11,
+  "iteration": 12,
   "builder_model": "GPT:5.6-Luna",
   "inspector_model": "GPT:5.6-Sol",
-  "blocker": "App Store Connect upload/readiness still needs authenticated access; complete UI suite was started but exceeded the available execution window and was stopped after the focused suite passed.",
+  "blocker": "App Store Connect live verification remains externally blocked: ASC_KEY_PATH, ASC_KEY_ID, and ASC_ISSUER_ID are unavailable, and no safely usable authenticated App Store Connect session was present. No metadata, build selection, or Beta App Review submission was changed.",
   "initial_sha": "44ecfd4324a18250f78cd6e4eb574c2ce88e5827",
   "created_at": "2026-10-02T20:24:28Z",
   "history": [
@@ -318,6 +318,38 @@
       "iteration": 11,
       "verdict": "FAIL",
       "summary": "Backend and iOS gates, including the complete 71-test UI suite and signed export, pass; however, the exact Docker build fails on v3 NuGet TLS EOFs and live App Store Connect selection/metadata readiness remains unverified."
+    },
+    {
+      "iteration": 12,
+      "status": "ready_for_inspection",
+      "completed_at": "2026-10-03T10:11:51.217874-07:00",
+      "quality_gates": {
+        "backend_restore": "passed",
+        "backend_release_build_warnings_as_errors": "passed: 0 warnings, 0 errors",
+        "backend_tests": "passed: 80 tests (49 API, 31 domain)",
+        "production_integration_tests": "passed: 3/3 ProductionModeTests and LegacyMigrationTests",
+        "docker_build": "passed: exact docker compose build exited 0; default remains NuGet v3 with five transient retries and built-in v2 transport fallback",
+        "docker_health": "passed: exact docker compose up -d and curl returned Healthy",
+        "docker_overridden_project_name": "passed: COMPOSE_PROJECT_NAME=custombeta compose up and curl returned Healthy",
+        "ios_project_generation": "passed",
+        "ios_unit_tests": "passed: 40 tests",
+        "ios_onboarding_ui_tests": "started but not completed in iteration 12 after the exact Docker restore fallback exceeded the execution window; prior independent 10/10 evidence retained",
+        "ios_family_ui_tests": "started but not completed in iteration 12 after the exact Docker restore fallback exceeded the execution window; prior independent 8/8 evidence retained",
+        "ios_complete_ui_suite": "started but not completed in iteration 12 after the exact Docker restore fallback exceeded the execution window; prior independent 71/71 evidence retained",
+        "ui_retry_shell_tests": "passed",
+        "signed_release_archive_export": "passed: 20261003.1706; export completed successfully",
+        "diff_check": "passed"
+      },
+      "release": {
+        "app_store_connect_build": "blocked: no authenticated upload session or API key available",
+        "external_testing_selection": "blocked: no authenticated App Store Connect session; no selection changed",
+        "saved_metadata": "blocked: no authenticated App Store Connect session; no metadata changed",
+        "beta_review_submission": "not submitted; explicit confirmation remains required"
+      },
+      "product_fixes": [
+        "Docker builds retain NuGet v3 as the default, retry transient transport failures, and fall back internally to the compatible v2 endpoint without an override",
+        "Builder trailers are emitted as one contiguous parseable trailer block"
+      ]
     }
   ]
 }
