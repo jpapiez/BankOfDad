@@ -205,7 +205,7 @@
     {
       "iteration": 7,
       "verdict": "FAIL",
-      "summary": "All local product, Docker, signal-retry, UI, and signed-export gates pass and upload processing is proven, but live external-testing and saved-metadata readiness remain unverifiable; the Builder Assisted-by footer also does not parse as a trailer."
+      "summary": "All required local gates pass and the retained Xcode log proves build 20261002.2202 reached processing, but live external-group selectability and persisted beta metadata remain independently unverifiable; the Builder Assisted-by footer also does not parse as a trailer."
     }
   ]
 }
