@@ -108,6 +108,15 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJw
         }
     };
 });
+// Validate token lifetime against the same IClock that issues tokens, so tokens and domain time cannot disagree.
+builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)
+    .Configure<IClock>((options, clock) => options.TokenValidationParameters.LifetimeValidator = (notBefore, expires, _, parameters) =>
+    {
+        var now = clock.UtcNow.UtcDateTime;
+        return expires is not null
+            && expires.Value.ToUniversalTime() >= now - parameters.ClockSkew
+            && (notBefore is null || notBefore.Value.ToUniversalTime() <= now + parameters.ClockSkew);
+    });
 builder.Services.AddAuthorization(options =>
 {
     options.AddPolicy("Parent", policy => policy.RequireClaim("role", "parent"));
