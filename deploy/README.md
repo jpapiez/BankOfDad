@@ -39,6 +39,24 @@ In the [Tailscale admin console](https://login.tailscale.com/admin):
 
 ## 2. Install and start
 
+On the server, run:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/jpapiez/BankOfDad/main/deploy/install.sh | bash
+```
+
+The installer checks for a 64-bit Linux with Docker and the compose plugin (it uses `sudo` for Docker if your user isn't in the `docker` group), downloads the stack into `~/bankofdad`, generates the database password and JWT signing key into `~/bankofdad/.env` (mode `600`), asks for the Tailscale auth key, starts everything, and prints the server's `https://…ts.net` URL once the API is healthy. It doesn't install Docker for you.
+
+- **Re-runs keep your existing `.env`** and update the stack. An existing empty `.env` is rejected rather than overwritten: restore it from backup, since generating a new password won't change the password in an existing database.
+- **Managed files:** it replaces `docker-compose.yml`, `tailscale/serve.json`, and `.env.example` only after all downloads succeed. Your `.env`, APNs keys in `secrets/`, and Docker volumes are kept. Use the manual workflow below if you maintain custom versions of the managed files.
+- **Tailscale configuration is reloaded:** the installer recreates only the Tailscale container after updating the other services, so its file bind mount sees the downloaded Serve configuration. This briefly interrupts tailnet access; the database and network namespace are not force-recreated.
+- **Non-interactive:** pass `TS_AUTHKEY=tskey-...` to `bash` on the right of the pipe. Other options there: `BANKOFDAD_DIR` (install directory), `BANKOFDAD_REF` (branch, tag or commit for the downloaded stack files), `TS_HOSTNAME`, and `TS_EXTRA_ARGS` (e.g. `--advertise-tags=tag:bankofdad`). Prefer the prompt for interactive use so the key isn't saved in shell history.
+- **Trust boundary:** `curl | bash` executes repository code with your account's privileges, including Docker access. To inspect it first, run `curl -fsSLO https://raw.githubusercontent.com/jpapiez/BankOfDad/main/deploy/install.sh`, review it, then `bash install.sh`. For automation, use `curl -fsSL -o install.sh https://raw.githubusercontent.com/jpapiez/BankOfDad/main/deploy/install.sh && bash install.sh` so download failures propagate. To pin a revision, replace `main` in the script URL with a reviewed commit SHA and also pass that SHA as `BANKOFDAD_REF`. This pins the script and stack files, **not** container images; pin the API image separately in `.env`.
+
+The installer checks local API health and waits for a Tailscale Serve URL. Verify the printed `/health` URL from a family device on the tailnet before relying on it; local health cannot prove that tailnet permissions or certificate settings are correct.
+
+### Manual install
+
 The server only needs this `deploy/` folder. Copy it over, e.g. `scp -r deploy user@server:~/bankofdad`, or clone the repository. Then:
 
 ```sh
@@ -78,11 +96,17 @@ Optionally, restrict access in your access-control policy so tailnet members can
 
 ## Updating
 
+**Back up first.** Updates can apply database migrations; switching back to an older image may not undo those changes. Re-run the installer, or from the install directory:
+
 ```sh
 docker compose pull && docker compose up -d
 ```
 
 To hold or roll back to a specific build, set `BANKOFDAD_IMAGE=ghcr.io/jpapiez/bankofdad-api:sha-<short sha>` in `.env`.
+
+## Installer development
+
+On Linux, run `bash -n deploy/install.sh` and `python3 deploy/tests/test_install.py` from the repository root. The tests mock Docker, downloads, and Tailscale; they do not prove a real deployment works. The **Home installer tests** CI job runs them on every pull request.
 
 ## Backups
 

@@ -68,7 +68,7 @@ When `APNS_KEY_ID` is empty the API only logs notifications. To send real pushes
 
 ## Hosting at home (Tailscale)
 
-To run the backend on an always-on Linux box or Raspberry Pi, use [`deploy/`](deploy/README.md). Family iPhones reach it at `https://bankofdad.<tailnet>.ts.net` over Tailscale, at home or away, with a trusted certificate. It runs the prebuilt multi-arch image from GHCR in Production mode and publishes nothing on the LAN. To run the same stack on a small Azure VM instead (about $13/month), see [`deploy/azure/`](deploy/azure/README.md).
+To run the backend on an always-on Linux box or Raspberry Pi, use [`deploy/`](deploy/README.md). Family iPhones reach it at `https://bankofdad.<tailnet>.ts.net` over Tailscale, at home or away, with a trusted certificate. It runs the prebuilt multi-arch image from GHCR in Production mode and publishes nothing on the LAN. On the server, install with `curl -fsSL https://raw.githubusercontent.com/jpapiez/BankOfDad/main/deploy/install.sh | bash`. To run the same stack on a small Azure VM instead (about $13/month), see [`deploy/azure/`](deploy/azure/README.md).
 
 ## Running the iOS app
 
@@ -98,11 +98,12 @@ Apple setup checklist:
 
 | Job | What it checks |
 |---|---|
+| **Home installer tests** | Shell syntax and isolated first-install, rerun, and failure-path tests for `deploy/install.sh`, with Docker, downloads, and Tailscale mocked. |
 | **Backend build & test** | Release build of `backend/BankOfDad.slnx` with compiler warnings as errors, then all domain and Testcontainers integration tests (TRX results uploaded as an artifact). |
 | **Docker compose smoke test** | `docker compose build` and `up`, then waits for `GET /health` to return `Healthy`. |
 | **iOS build & test** | On `macos-15`: `xcodegen generate`, then `xcodebuild test` of the `BankOfDad` scheme on the newest available iPhone simulator, with code signing disabled. The end-to-end `BankOfDadUITests` are skipped because they need the Docker backend; run them locally with `ios/scripts/run-ui-tests.sh`. |
 
-To make these required for merging, add the three job names above as required status checks in the branch protection rule (or ruleset) for `main`.
+To make these required for merging, add the job names above as required status checks in the branch protection rule (or ruleset) for `main`.
 
 [`.github/workflows/publish-image.yml`](.github/workflows/publish-image.yml) builds the API image for `linux/amd64` and `linux/arm64` on pull requests that touch `backend/`. On merges to `main` it also pushes the image to `ghcr.io/jpapiez/bankofdad-api` (`latest` and `sha-<short sha>`) for [home hosting](deploy/README.md). The image is public, so `docker pull` needs no login.
 
