@@ -126,6 +126,7 @@ class InstallerTests(unittest.TestCase):
         result = self.run_installer(TS_AUTHKEY=None)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(env.read_bytes(), before)
+        self.assertIn("database migrations", result.stdout)
 
     def test_uses_actual_published_port(self):
         result = self.run_installer(MOCK_PORT="9090")
@@ -136,6 +137,20 @@ class InstallerTests(unittest.TestCase):
         result = self.run_installer()
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertFalse(any("--remove-orphans" in call for call in self.calls()))
+
+    def test_rerun_recreates_only_tailscale_for_replaced_bind_mount(self):
+        self.existing_env()
+        config = self.install / "tailscale" / "serve.json"
+        config.parent.mkdir()
+        config.write_text('{"old": "configuration"}\n')
+        result = self.run_installer()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(config.read_bytes(), (DEPLOY / "tailscale" / "serve.json").read_bytes())
+        up_calls = [call for call in self.calls() if call[:3] == ["docker", "compose", "up"]]
+        self.assertEqual(up_calls, [
+            ["docker", "compose", "up", "-d", "db", "netns", "api"],
+            ["docker", "compose", "up", "-d", "--force-recreate", "--no-deps", "tailscale"],
+        ])
 
     def test_existing_empty_env_is_not_overwritten(self):
         env = self.existing_env("")
@@ -188,7 +203,7 @@ class InstallerTests(unittest.TestCase):
     def test_sudo_docker_fallback(self):
         result = self.run_installer(REQUIRE_SUDO="1")
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn(["sudo", "docker", "compose", "up", "-d"], self.calls())
+        self.assertIn(["sudo", "docker", "compose", "up", "-d", "--force-recreate", "--no-deps", "tailscale"], self.calls())
 
     def test_script_without_final_main_does_nothing(self):
         result = self.run_installer(script=self.script.rsplit('\nmain "$@"', 1)[0])

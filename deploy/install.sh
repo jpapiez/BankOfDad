@@ -167,6 +167,7 @@ main() {
 
   if [[ -s $dir/.env ]]; then
     say "Keeping existing $dir/.env"
+    say "Updating may apply database migrations. Backup guidance: https://github.com/$REPO/blob/$ref/deploy/README.md#backups"
   else
     write_env "$STAGING_DIR/.env"
     # Publish the complete private file without replacing a concurrently created .env.
@@ -181,7 +182,9 @@ main() {
   say "Pulling images"
   docker_cmd compose pull --quiet
   say "Starting the stack"
-  docker_cmd compose up -d
+  docker_cmd compose up -d db netns api
+  # A replaced single-file bind mount otherwise keeps the old inode in a running container.
+  docker_cmd compose up -d --force-recreate --no-deps tailscale
 
   local binding port
   binding=$(docker_cmd compose port netns 8080)
