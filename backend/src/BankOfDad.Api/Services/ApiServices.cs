@@ -35,7 +35,7 @@ public sealed class AuthService(BankOfDadDbContext db, IPasswordService password
 {
     public async Task<AuthResponse> IssueAsync(User user, string? deviceName, CancellationToken ct)
     {
-        var accessExpires = clock.UtcNow.AddMinutes(15);
+        var accessExpires = AccessTokenExpiry();
         var refresh = Convert.ToBase64String(RandomNumberGenerator.GetBytes(64));
         db.RefreshTokens.Add(new RefreshToken
         {
@@ -54,7 +54,7 @@ public sealed class AuthService(BankOfDadDbContext db, IPasswordService password
         var token = await db.RefreshTokens.Include(x => x.User).SingleOrDefaultAsync(x => x.TokenHash == hash, ct).ConfigureAwait(false);
         if (token?.User is null || token.RevokedAt is not null || token.ExpiresAt <= clock.UtcNow) throw new ApiException(401, "Invalid refresh token.");
         token.RevokedAt = clock.UtcNow;
-        var accessExpires = clock.UtcNow.AddMinutes(15);
+        var accessExpires = AccessTokenExpiry();
         var replacement = Convert.ToBase64String(RandomNumberGenerator.GetBytes(64));
         var replacementEntity = new RefreshToken { UserId = token.UserId, TokenHash = SecretHasher.Sha256(replacement), DeviceName = token.DeviceName, ExpiresAt = clock.UtcNow.AddDays(60) };
         db.RefreshTokens.Add(replacementEntity);
@@ -76,6 +76,9 @@ public sealed class AuthService(BankOfDadDbContext db, IPasswordService password
 
     public string HashPassword(User user, string password) => passwords.Hash(user, password);
     public bool Verify(User user, string password) => passwords.Verify(user, password);
+
+    // JwtBearer validates lifetime against wall-clock time, so access tokens must be issued from it too; IClock is the business clock.
+    private static DateTimeOffset AccessTokenExpiry() => DateTimeOffset.UtcNow.AddMinutes(15);
 
     private string CreateAccessToken(User user, DateTimeOffset expires)
     {
