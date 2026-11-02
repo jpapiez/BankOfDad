@@ -3,6 +3,8 @@
 import json
 import os
 from pathlib import Path
+import shutil
+import socket
 import stat
 import subprocess
 import tempfile
@@ -39,6 +41,8 @@ elif tool == "docker":
         sys.exit(1 if os.getenv("FAIL_DOCKER") or (os.getenv("REQUIRE_SUDO") and not os.getenv("MOCK_SUDO")) else 0)
     if args == ["compose", "port", "netns", "8080"]:
         print("127.0.0.1:" + os.getenv("MOCK_PORT", "8080"))
+    elif args[:3] == ["compose", "up", "-d"] and "db" in args and os.getenv("FAIL_UP"):
+        sys.exit("Bind for 127.0.0.1:8080 failed: port is already allocated")
     elif args[:4] == ["compose", "exec", "-T", "tailscale"]:
         if args[4:] == ["tailscale", "serve", "status"]:
             print("No serve config" if os.getenv("FAIL_TAILSCALE") else "https://bankofdad.test.ts.net (tailnet only)\n|-- / proxy http://127.0.0.1:8080")
@@ -69,11 +73,17 @@ class InstallerTests(unittest.TestCase):
             tool.write_text(MOCK_TOOL)
             tool.chmod(0o755)
         self.log = self.root / "calls.jsonl"
+        # A port nothing listens on, so results don't depend on what the host runs on 8080.
+        with socket.socket() as probe:
+            probe.bind(("127.0.0.1", 0))
+            self.port = str(probe.getsockname()[1])
         self.env = {
             **os.environ,
             "PATH": str(self.bin) + os.pathsep + os.environ["PATH"],
             "BANKOFDAD_DIR": str(self.install),
             "BANKOFDAD_REF": "test-ref",
+            "BANKOFDAD_PORT": self.port,
+            "MOCK_PORT": self.port,
             "TS_AUTHKEY": "tskey-test-not-a-real-key",
             "TS_HOSTNAME": "bankofdad-test",
             "TS_EXTRA_ARGS": "--advertise-tags=tag:bankofdad",
@@ -98,7 +108,18 @@ class InstallerTests(unittest.TestCase):
     def calls(self):
         return [json.loads(line) for line in self.log.read_text().splitlines()]
 
-    def existing_env(self, content="POSTGRES_PASSWORD=keep-this\nJWT_SIGNING_KEY=keep-this-too\n"):
+    def occupy_port(self):
+        listener = socket.socket()
+        self.addCleanup(listener.close)
+        listener.bind(("127.0.0.1", int(self.port)))
+        listener.listen()
+
+    def started_stack(self):
+        return any(call[:3] == ["docker", "compose", "up"] for call in self.calls())
+
+    def existing_env(self, content=None):
+        if content is None:
+            content = f"POSTGRES_PASSWORD=keep-this\nJWT_SIGNING_KEY=keep-this-too\nAPI_LOCAL_PORT={self.port}\n"
         self.install.mkdir(parents=True)
         env = self.install / ".env"
         env.write_text(content)
@@ -114,6 +135,7 @@ class InstallerTests(unittest.TestCase):
         self.assertRegex(content, r"JWT_SIGNING_KEY=[a-f0-9]{64}\n")
         self.assertIn("TS_HOSTNAME=bankofdad-test\n", content)
         self.assertIn("TS_EXTRA_ARGS=--advertise-tags=tag:bankofdad\n", content)
+        self.assertIn(f"API_LOCAL_PORT={self.port}\n", content)
         self.assertNotIn(self.env["TS_AUTHKEY"], result.stdout + result.stderr)
         self.assertIn("https://bankofdad.test.ts.net/health", result.stdout)
         self.assertIn("API_BASE_URL = https:/$()/bankofdad.test.ts.net", result.stdout)
@@ -121,12 +143,74 @@ class InstallerTests(unittest.TestCase):
         self.assertTrue(any("test-ref/deploy/" in str(call) for call in self.calls()))
 
     def test_rerun_preserves_env_without_optional_port(self):
-        env = self.existing_env()
+        env = self.existing_env("POSTGRES_PASSWORD=keep-this\nJWT_SIGNING_KEY=keep-this-too\n")
+        # The running stack reports 8080 as its own, so the host's real 8080 doesn't matter.
+        (self.install / "docker-compose.yml").write_text("existing compose\n")
         before = env.read_bytes()
-        result = self.run_installer(TS_AUTHKEY=None)
+        result = self.run_installer(TS_AUTHKEY=None, BANKOFDAD_PORT=None, MOCK_PORT="8080")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(env.read_bytes(), before)
         self.assertIn("database migrations", result.stdout)
+
+    def test_busy_port_on_fresh_install_fails_before_writing(self):
+        self.occupy_port()
+        result = self.run_installer()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn(f"port {self.port} on 127.0.0.1 is already in use", result.stderr)
+        self.assertIn("BANKOFDAD_PORT=", result.stderr)
+        self.assertFalse(self.install.exists())
+        self.assertFalse(self.started_stack())
+
+    def test_invalid_requested_port_fails_before_writing(self):
+        for bad in ("0", "65536", "80a", "08080", " 8080"):
+            with self.subTest(port=bad):
+                result = self.run_installer(BANKOFDAD_PORT=bad)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("BANKOFDAD_PORT must be", result.stderr)
+                self.assertFalse(self.install.exists())
+
+    def test_rerun_allows_port_held_by_own_stack(self):
+        self.existing_env()
+        (self.install / "docker-compose.yml").write_text("existing compose\n")
+        self.occupy_port()
+        result = self.run_installer()
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_reads_hand_edited_port_formats_like_compose(self):
+        self.occupy_port()
+        for line in (f"export API_LOCAL_PORT={self.port}", f'API_LOCAL_PORT="{self.port}" # moved off 8080', f"API_LOCAL_PORT = {self.port}\r"):
+            with self.subTest(line=line):
+                shutil.rmtree(self.install, ignore_errors=True)
+                self.existing_env(f"POSTGRES_PASSWORD=keep-this\n{line}\n")
+                result = self.run_installer()
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(f"port {self.port} on 127.0.0.1 is already in use", result.stderr)
+
+    def test_rerun_with_port_taken_by_other_program_points_to_env(self):
+        env = self.existing_env()
+        before = env.read_bytes()
+        self.occupy_port()
+        result = self.run_installer(BANKOFDAD_PORT=None)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("already in use", result.stderr)
+        self.assertIn("API_LOCAL_PORT", result.stderr)
+        self.assertEqual(env.read_bytes(), before)
+        self.assertFalse(self.started_stack())
+
+    def test_rerun_rejects_override_that_disagrees_with_env(self):
+        env = self.existing_env()
+        before = env.read_bytes()
+        result = self.run_installer(BANKOFDAD_PORT="8091" if self.port != "8091" else "8092")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("only applies to first installs", result.stderr)
+        self.assertEqual(env.read_bytes(), before)
+        self.assertFalse(self.started_stack())
+
+    def test_failed_start_explains_port_fix(self):
+        result = self.run_installer(FAIL_UP="1")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("API_LOCAL_PORT", result.stderr)
+        self.assertNotIn("Done.", result.stdout)
 
     def test_uses_actual_published_port(self):
         result = self.run_installer(MOCK_PORT="9090")
