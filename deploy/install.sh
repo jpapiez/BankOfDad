@@ -10,6 +10,8 @@
 # Optional environment variables:
 #   BANKOFDAD_DIR   install directory (default: ~/bankofdad)
 #   BANKOFDAD_REF   git branch, tag or commit to download the stack from (default: main)
+#   BANKOFDAD_PORT  loopback port for the API on first install (default: 8080);
+#                   existing installs use API_LOCAL_PORT in .env
 #   TS_AUTHKEY      Tailscale auth key; skips the prompt on first install
 #   TS_HOSTNAME     Tailscale node name (default: bankofdad)
 #   TS_EXTRA_ARGS   extra `tailscale up` flags, e.g. --advertise-tags=tag:bankofdad
@@ -91,8 +93,35 @@ prompt_authkey() {
   printf '%s' "$key"
 }
 
+valid_port() { [[ $1 =~ ^[1-9][0-9]{0,4}$ ]] && (( $1 <= 65535 )); }
+
+# Compose treats an unset or empty API_LOCAL_PORT as 8080.
+env_port() {
+  local value
+  value=$(sed -n 's/^[[:space:]]*API_LOCAL_PORT[[:space:]]*=//p' "$1" | tail -n 1 | tr -d "\"'\r[:space:]")
+  printf '%s' "${value:-8080}"
+}
+
+# Anything accepting connections on 127.0.0.1:port blocks Docker from publishing it there.
+port_in_use() { (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null; }
+
+# On re-runs the port is legitimately held by this stack's own netns container.
+stack_publishes_port() {
+  local dir=$1 port=$2 binding
+  [[ -f $dir/docker-compose.yml ]] || return 1
+  binding=$(cd "$dir" && docker_cmd compose port netns 8080 2>/dev/null) || return 1
+  [[ ${binding##*:} == "$port" ]]
+}
+
+check_port() {
+  local dir=$1 port=$2 fix=$3
+  stack_publishes_port "$dir" "$port" && return 0
+  port_in_use "$port" || return 0
+  die "port $port on 127.0.0.1 is already in use by another program (find it with: sudo ss -ltnp 'sport = :$port'). $fix"
+}
+
 write_env() {
-  local env_file=$1 authkey db_password jwt_key
+  local env_file=$1 port=$2 authkey db_password jwt_key
   authkey=$(prompt_authkey)
   [[ $authkey == tskey-* && $authkey != *$'\n'* && $authkey != *$'\r'* ]] \
     || die "that doesn't look like a single-line Tailscale auth key (expected tskey-...)."
@@ -112,7 +141,7 @@ write_env() {
       echo "TS_HOSTNAME=${TS_HOSTNAME:-bankofdad}"
       echo "TS_EXTRA_ARGS=${TS_EXTRA_ARGS:-}"
       echo "BANKOFDAD_IMAGE=ghcr.io/jpapiez/bankofdad-api:latest"
-      echo "API_LOCAL_PORT=8080"
+      echo "API_LOCAL_PORT=$port"
       echo "APNS_KEY_ID="
       echo "APNS_TEAM_ID="
       echo "APNS_BUNDLE_ID=com.example.bankofdad"
@@ -156,6 +185,20 @@ main() {
       || die "$dir/.env exists but is empty or not a regular file. Restore it from backup; it will not be overwritten."
   fi
 
+  local port requested=${BANKOFDAD_PORT:-}
+  [[ -z $requested ]] || valid_port "$requested" \
+    || die "BANKOFDAD_PORT must be a port number from 1 to 65535 (got '$requested')."
+  if [[ -s $dir/.env ]]; then
+    port=$(env_port "$dir/.env")
+    valid_port "$port" || die "API_LOCAL_PORT in $dir/.env is not a valid port ('$port')."
+    [[ -z $requested || $requested == "$port" ]] \
+      || die "this install uses port $port from $dir/.env; BANKOFDAD_PORT only applies to first installs. Set API_LOCAL_PORT=$requested in $dir/.env and re-run."
+    check_port "$dir" "$port" "Free it, or set API_LOCAL_PORT to a free port in $dir/.env and re-run."
+  else
+    port=${requested:-8080}
+    check_port "$dir" "$port" "Free it, or re-run with a free port: curl -fsSL https://raw.githubusercontent.com/$REPO/$ref/deploy/install.sh | BANKOFDAD_PORT=8090 bash"
+  fi
+
   say "Installing into $dir (from $REPO@$ref)"
   mkdir -p "$dir/tailscale" "$dir/secrets"
   dir=$(cd "$dir" && pwd -P)
@@ -169,7 +212,7 @@ main() {
     say "Keeping existing $dir/.env"
     say "Updating may apply database migrations. Backup guidance: https://github.com/$REPO/blob/$ref/deploy/README.md#backups"
   else
-    write_env "$STAGING_DIR/.env"
+    write_env "$STAGING_DIR/.env" "$port"
     # Publish the complete private file without replacing a concurrently created .env.
     ln -- "$STAGING_DIR/.env" "$dir/.env"
     say "Wrote $dir/.env with generated database and JWT secrets"
@@ -182,11 +225,12 @@ main() {
   say "Pulling images"
   docker_cmd compose pull --quiet
   say "Starting the stack"
-  docker_cmd compose up -d db netns api
+  docker_cmd compose up -d db netns api \
+    || die "could not start the stack (see the Docker error above). If port $port is taken, free it or change API_LOCAL_PORT in $dir/.env, then re-run."
   # A replaced single-file bind mount otherwise keeps the old inode in a running container.
   docker_cmd compose up -d --force-recreate --no-deps tailscale
 
-  local binding port
+  local binding
   binding=$(docker_cmd compose port netns 8080)
   port=${binding##*:}
   [[ $port =~ ^[0-9]+$ ]] || die "could not determine the API's published port."
