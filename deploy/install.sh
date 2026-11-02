@@ -98,7 +98,8 @@ valid_port() { [[ $1 =~ ^[1-9][0-9]{0,4}$ ]] && (( $1 <= 65535 )); }
 # Compose treats an unset or empty API_LOCAL_PORT as 8080.
 env_port() {
   local value
-  value=$(sed -n 's/^[[:space:]]*API_LOCAL_PORT[[:space:]]*=//p' "$1" | tail -n 1 | tr -d "\"'\r[:space:]")
+  value=$(sed -n -E '/^[[:space:]]*(export[[:space:]]+)?API_LOCAL_PORT[[:space:]]*=/{s/^[^=]*=//;s/[[:space:]]+#.*$//;p;}' "$1" \
+    | tail -n 1 | tr -d "\"'\r[:space:]")
   printf '%s' "${value:-8080}"
 }
 

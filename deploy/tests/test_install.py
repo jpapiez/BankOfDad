@@ -3,6 +3,7 @@
 import json
 import os
 from pathlib import Path
+import shutil
 import socket
 import stat
 import subprocess
@@ -174,6 +175,16 @@ class InstallerTests(unittest.TestCase):
         self.occupy_port()
         result = self.run_installer()
         self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_reads_hand_edited_port_formats_like_compose(self):
+        self.occupy_port()
+        for line in (f"export API_LOCAL_PORT={self.port}", f'API_LOCAL_PORT="{self.port}" # moved off 8080', f"API_LOCAL_PORT = {self.port}\r"):
+            with self.subTest(line=line):
+                shutil.rmtree(self.install, ignore_errors=True)
+                self.existing_env(f"POSTGRES_PASSWORD=keep-this\n{line}\n")
+                result = self.run_installer()
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(f"port {self.port} on 127.0.0.1 is already in use", result.stderr)
 
     def test_rerun_with_port_taken_by_other_program_points_to_env(self):
         env = self.existing_env()
